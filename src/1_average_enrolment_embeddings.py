@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from experiment_paths import enrolment_embeddings_path, original_embeddings_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
@@ -59,7 +60,7 @@ def average_enrollment_embeddings(embeddings_path, enroll_csv_path, output_parqu
 
 
 def process_experiment(experiment_dir):
-    embeddings_path = experiment_dir / "embeddings.parquet"
+    embeddings_path = original_embeddings_path(experiment_dir)
     if not embeddings_path.is_file():
         raise FileNotFoundError(f"Missing required embeddings file: {embeddings_path}")
 
@@ -70,7 +71,7 @@ def process_experiment(experiment_dir):
         if not enroll_csv_path.is_file():
             raise FileNotFoundError(f"Missing required enrollment file: {enroll_csv_path}")
 
-        output_path = experiment_dir / f"{split}_enroll_embeddings.parquet"
+        output_path = enrolment_embeddings_path(experiment_dir, split)
         print(f"{split}:")
         average_enrollment_embeddings(embeddings_path, enroll_csv_path, output_path)
         print()
@@ -98,7 +99,8 @@ if __name__ == "__main__":
 
     print("Creating speaker-level enrolment embeddings.")
     print("For each experiment, dev and test enrolment utterances are matched to")
-    print("embeddings.parquet, L2-normalized, averaged per speaker, and saved.\n")
+    print("embeddings/embeddings.parquet, L2-normalized, averaged per speaker, and saved")
+    print("under embeddings/enrolment/.\n")
 
     if args.experiment:
         process_experiment(EXPERIMENTS_DIR / args.experiment)

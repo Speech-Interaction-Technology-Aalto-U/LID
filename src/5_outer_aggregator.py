@@ -3,11 +3,11 @@ import json
 import pandas as pd
 from pathlib import Path
 
+from experiment_paths import lid_path, scores_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
-LID_FILE = "local_information_disclosures.csv"
 METRICS_FILE = "results.json"
 SEPARATOR = "-" * 72
 
@@ -65,6 +65,7 @@ def aggregate_local_information_disclosures(
         "LID-": lid_negative,
         "LID_max": float(lids.max()),
     }
+    output_json_path.parent.mkdir(parents=True, exist_ok=True)
     output_json_path.write_text(json.dumps(metrics, indent=2) + "\n")
 
     print(f"{n_trials} trial-level LID values aggregated")
@@ -74,10 +75,10 @@ def aggregate_local_information_disclosures(
 
 
 def process_experiment(experiment_dir):
-    lid_csv_path = experiment_dir / LID_FILE
+    lid_csv_path = lid_path(experiment_dir)
     if not lid_csv_path.is_file():
         raise FileNotFoundError(f"Missing required LID file: {lid_csv_path}")
-    test_scores_path = experiment_dir / "test_scores.csv"
+    test_scores_path = scores_path(experiment_dir, "test")
     if not test_scores_path.is_file():
         raise FileNotFoundError(f"Missing required test scores file: {test_scores_path}")
 

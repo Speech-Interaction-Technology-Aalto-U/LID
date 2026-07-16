@@ -1,14 +1,19 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 from cllr import compute_cllr, plot_pav_calibration
 from eer import compute_eer, plot_eer_histogram
+from experiment_paths import scores_path
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
 OUTPUT_DIR_NAME = "alternative_metrics"
@@ -74,7 +79,7 @@ def compute_alternative_metrics(test_scores_path, output_dir):
 
 
 def process_experiment(experiment_dir):
-    test_scores_path = experiment_dir / "test_scores.csv"
+    test_scores_path = scores_path(experiment_dir, "test")
     if not test_scores_path.is_file():
         raise FileNotFoundError(f"Missing required test scores file: {test_scores_path}")
 

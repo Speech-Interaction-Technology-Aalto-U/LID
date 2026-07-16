@@ -6,12 +6,12 @@ from pathlib import Path
 from scipy.special import logsumexp
 from sklearn.linear_model import LogisticRegression
 
+from experiment_paths import calibration_parameters_path, scores_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
 SPLITS = ("dev", "test")
 SEPARATOR = "-" * 72
-CALIBRATION_PARAMETERS_FILE = "calibration_parameters.json"
 
 
 def relative_path(path):
@@ -77,6 +77,7 @@ def fit_dev_logistic_regression(dev_scores_path, output_json_path):
         "n_non_mated": int(len(labels) - labels.sum()),
     }
 
+    output_json_path.parent.mkdir(parents=True, exist_ok=True)
     output_json_path.write_text(json.dumps(parameters, indent=2) + "\n")
 
     print(
@@ -120,27 +121,27 @@ def process_experiment(experiment_dir):
     print(f"Experiment: {experiment_dir.name}")
     print(SEPARATOR)
     for split in SPLITS:
-        scores_path = experiment_dir / f"{split}_scores.csv"
-        if not scores_path.is_file():
-            raise FileNotFoundError(f"Missing required scores file: {scores_path}")
+        split_scores_path = scores_path(experiment_dir, split)
+        if not split_scores_path.is_file():
+            raise FileNotFoundError(f"Missing required scores file: {split_scores_path}")
 
         print(f"{split}:")
-        add_trial_z_scores(scores_path)
+        add_trial_z_scores(split_scores_path)
         print()
 
     print("dev calibration model:")
     parameters = fit_dev_logistic_regression(
-        experiment_dir / "dev_scores.csv",
-        experiment_dir / CALIBRATION_PARAMETERS_FILE,
+        scores_path(experiment_dir, "dev"),
+        calibration_parameters_path(experiment_dir),
     )
     print()
 
     print("test LLR scores:")
-    apply_llr_to_scores(experiment_dir / "test_scores.csv", parameters)
+    apply_llr_to_scores(scores_path(experiment_dir, "test"), parameters)
     print()
 
     print("test probabilities:")
-    add_trial_probabilities(experiment_dir / "test_scores.csv")
+    add_trial_probabilities(scores_path(experiment_dir, "test"))
     print()
 
 

@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from experiment_paths import calibration_parameters_path, lid_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
-LID_FILE = "local_information_disclosures.csv"
 METRICS_FILE = "results.json"
-SUMMARY_DIR = RESULTS_DIR / "summary"
+ALTERNATIVE_METRICS_DIR_NAME = "alternative_metrics"
+SUMMARY_DIR = PROJECT_ROOT / "results" / "summary"
 SEPARATOR = "-" * 72
 
 
@@ -110,15 +111,17 @@ def get_n_enrolments(experiment_dir, df_lid):
 
 
 def load_lid_dataframe(experiment_dir):
-    lid_path = experiment_dir / LID_FILE
-    if not lid_path.is_file():
-        raise FileNotFoundError(f"Missing required LID file: {lid_path}")
+    experiment_lid_path = lid_path(experiment_dir)
+    if not experiment_lid_path.is_file():
+        raise FileNotFoundError(f"Missing required LID file: {experiment_lid_path}")
 
-    df_lid = pd.read_csv(lid_path)
+    df_lid = pd.read_csv(experiment_lid_path)
     required_columns = {"p", "LID"}
     missing_columns = required_columns - set(df_lid.columns)
     if missing_columns:
-        raise ValueError(f"{lid_path} is missing required columns: {sorted(missing_columns)}")
+        raise ValueError(
+            f"{experiment_lid_path} is missing required columns: {sorted(missing_columns)}"
+        )
 
     return df_lid
 
@@ -187,6 +190,7 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(8.27, 4))
+    ax.grid(True, which="both", ls="-", color="gray", alpha=0.2, zorder=0)
 
     for experiment_name, scores in sorted(all_lid_data.items()):
         valid_scores = scores[np.isfinite(scores)]
@@ -264,6 +268,227 @@ def iter_experiment_dirs():
     return experiment_dirs
 
 
+def build_summary_table(experiment_dirs, out_dir):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for experiment_dir in experiment_dirs:
+        metrics_path = RESULTS_DIR / experiment_dir.name / METRICS_FILE
+        alt_metrics_path = (
+            RESULTS_DIR / experiment_dir.name / ALTERNATIVE_METRICS_DIR_NAME / METRICS_FILE
+        )
+
+        if not metrics_path.is_file():
+            raise FileNotFoundError(f"Missing required metrics file: {metrics_path}")
+        if not alt_metrics_path.is_file():
+            raise FileNotFoundError(
+                f"Missing required alternative metrics file: {alt_metrics_path}"
+            )
+
+        metrics = json.loads(metrics_path.read_text())
+        alt_metrics = json.loads(alt_metrics_path.read_text())
+        rows.append(
+            {
+                "Experiment": experiment_dir.name,
+                "EER": float(alt_metrics["EER"]),
+                "Cllr": float(alt_metrics["cllr"]),
+                "ALID": float(metrics["ALID"]),
+                "PDR": float(metrics["PDR"]),
+                "NDR": float(metrics["NDR"]),
+                "LID+": float(metrics["LID+"])
+                if metrics["LID+"] is not None
+                else np.nan,
+                "LID-": float(metrics["LID-"])
+                if metrics["LID-"] is not None
+                else np.nan,
+                "LID_max": float(metrics["LID_max"]),
+            }
+        )
+
+    df_summary = pd.DataFrame(rows).sort_values("EER").reset_index(drop=True)
+    summary_path = out_dir / "summary_table.csv"
+    df_summary.to_csv(summary_path, index=False)
+    print(f"saved {relative_path(summary_path)}")
+    return df_summary
+
+
+def build_calibration_coeff_table(experiment_dirs, out_dir):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for experiment_dir in experiment_dirs:
+        experiment_calibration_path = calibration_parameters_path(experiment_dir)
+        if not experiment_calibration_path.is_file():
+            raise FileNotFoundError(
+                f"Missing required calibration file: {experiment_calibration_path}"
+            )
+
+        calibration = json.loads(experiment_calibration_path.read_text())
+        if "w" not in calibration or "b" not in calibration:
+            raise ValueError(
+                f"{experiment_calibration_path} is missing required keys: ['w', 'b']"
+            )
+
+        rows.append(
+            {
+                "experiment": experiment_dir.name,
+                "w": float(calibration["w"]),
+                "b": float(calibration["b"]),
+            }
+        )
+
+    calibration_path = out_dir / "calibration_coeff.csv"
+    pd.DataFrame(rows).to_csv(calibration_path, index=False)
+    print(f"saved {relative_path(calibration_path)}")
+
+
+def plot_summary_visuals(df_summary, out_dir):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        plt.style.use("seaborn-v0_8-whitegrid")
+    except OSError:
+        pass
+
+    df_plot = df_summary[df_summary["Experiment"] != "plain"].copy()
+    if df_plot.empty:
+        raise ValueError("No experiments available for summary plotting after filtering.")
+
+    x_vals = df_plot["EER"]
+
+    fig, ax = plt.subplots(figsize=(5.4, 3.1))
+
+    experiment_colors = {
+        "B3": "tab:blue",
+        "B4": "tab:orange",
+        "B5": "tab:green",
+        "T10-2": "tab:red",
+        "T12-5": "tab:purple",
+        "T25-1": "tab:brown",
+        "T8-5": "tab:pink",
+        "plain": "tab:gray",
+        "random": "tab:olive",
+    }
+
+    import matplotlib.lines as mlines
+
+    for _, row in df_plot.iterrows():
+        x_val = row["EER"]
+        y_d_minus = row["LID-"]
+        y_mi = row["ALID"]
+        y_d_plus = row["LID+"]
+        y_r_max = row["LID_max"]
+        experiment = row["Experiment"]
+
+        color = experiment_colors.get(experiment.split("_", 1)[0], "black")
+
+        ax.scatter(x_val, y_d_minus, color=color, s=25, marker="v", zorder=3)
+        ax.scatter(x_val, y_mi, color=color, s=25, marker="o", zorder=3)
+        ax.scatter(x_val, y_d_plus, color=color, s=25, marker="^", zorder=3)
+        ax.scatter(x_val, y_r_max, color=color, s=25, marker="x", zorder=3)
+
+        y_values = [y for y in [y_d_minus, y_mi, y_d_plus, y_r_max] if np.isfinite(y)]
+        if y_values:
+            ax.plot(
+                [x_val, x_val],
+                [min(y_values), max(y_values)],
+                color=color,
+                linestyle="--",
+                linewidth=1,
+                zorder=2,
+                alpha=0.6,
+            )
+
+    type_handles = [
+        mlines.Line2D(
+            [], [], color="gray", marker="x", linestyle="None", markersize=5, label="LID_max"
+        ),
+        mlines.Line2D(
+            [], [], color="gray", marker="^", linestyle="None", markersize=5, label="LID+"
+        ),
+        mlines.Line2D(
+            [], [], color="gray", marker="o", linestyle="None", markersize=5, label="ALID"
+        ),
+        mlines.Line2D(
+            [], [], color="gray", marker="v", linestyle="None", markersize=5, label="LID-"
+        ),
+    ]
+
+    metric_legend = ax.legend(
+        handles=type_handles,
+        fontsize=7,
+        loc="upper right",
+        bbox_to_anchor=(1.0, 1.0),
+        title="Metric",
+        title_fontsize=7,
+        framealpha=1.0,
+        facecolor="white",
+        edgecolor="black",
+    )
+    ax.add_artist(metric_legend)
+
+    experiment_handles = [
+        mlines.Line2D(
+            [],
+            [],
+            color=experiment_colors.get(experiment.split("_", 1)[0], "black"),
+            marker="o",
+            linestyle="None",
+            markersize=5,
+            label=experiment,
+        )
+        for experiment in df_plot["Experiment"]
+    ]
+
+    ax.legend(
+        handles=experiment_handles,
+        fontsize=7,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        title="Experiment",
+        title_fontsize=7,
+        framealpha=1.0,
+        facecolor="white",
+        edgecolor="black",
+        borderaxespad=0.0,
+    )
+
+    ax.axhline(0, color="gray", linestyle=":", linewidth=1, zorder=1, alpha=0.5)
+    ax.set_xlabel("Equal Error Rate (EER)", fontsize=9)
+    ax.set_ylabel("Information Disclosure (bits)", fontsize=9)
+    ax.grid(True, which="both", ls="-", alpha=0.2)
+    ax.tick_params(axis="both", which="major", labelsize=8)
+
+    ax.set_xlim(max(0, x_vals.min() - 0.05), min(0.55, x_vals.max() + 0.05))
+
+    all_y_vals = pd.concat(
+        [
+            df_plot["LID-"],
+            df_plot["ALID"],
+            df_plot["LID+"],
+            df_plot["LID_max"],
+        ]
+    )
+    all_y_vals = all_y_vals[np.isfinite(all_y_vals)]
+    y_min = float(all_y_vals.min())
+    y_max = float(all_y_vals.max())
+    y_margin = (y_max - y_min) * 0.15
+    if y_margin == 0:
+        y_margin = 0.5
+    ax.set_ylim(y_min - y_margin, y_max + y_margin)
+
+    plt.tight_layout()
+
+    scatter_png_path = out_dir / "eer_vs_infodisc_scatter.png"
+    scatter_pdf_path = out_dir / "eer_vs_infodisc_scatter.pdf"
+    plt.savefig(scatter_png_path, dpi=300, bbox_inches="tight")
+    plt.savefig(scatter_pdf_path, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"saved {relative_path(scatter_png_path)}")
+    print(f"saved {relative_path(scatter_pdf_path)}")
+
+
 def plot_combined_summary(experiment_dirs):
     all_lid_data = {}
     for experiment_dir in experiment_dirs:
@@ -271,6 +496,9 @@ def plot_combined_summary(experiment_dirs):
         all_lid_data[experiment_dir.name] = df_lid["LID"].to_numpy()
 
     plot_combined_lid_ccdf(all_lid_data, SUMMARY_DIR)
+    df_summary = build_summary_table(experiment_dirs, SUMMARY_DIR)
+    build_calibration_coeff_table(experiment_dirs, SUMMARY_DIR)
+    plot_summary_visuals(df_summary, SUMMARY_DIR)
 
 
 if __name__ == "__main__":
@@ -288,8 +516,8 @@ if __name__ == "__main__":
     print("Plotting local information disclosure results.")
     print("For each experiment, probability and LID histograms are saved as PNG and PDF")
     print("under results/experiments/{experiment}/plots.")
-    print("When all experiments are processed, a combined LID CCDF summary is saved")
-    print("under results/experiments/summary.\n")
+    print("When all experiments are processed, combined summary plots and a metrics table")
+    print("are saved under results/experiments/summary.\n")
 
     if args.experiment:
         process_experiment(EXPERIMENTS_DIR / args.experiment)

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from experiment_paths import lid_path, scores_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
@@ -47,6 +48,7 @@ def create_local_information_disclosures(test_scores_path, output_csv_path):
     df_lid = df_mated[["trial_id", "trial_spk", "p"]].copy()
     df_lid["LID"] = np.log2(n_enrolments) + df_mated["ln_p"] / np.log(2)
     df_lid = df_lid[["trial_id", "trial_spk", "p", "LID"]]
+    output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     df_lid.to_csv(output_csv_path, index=False)
 
     print(
@@ -57,17 +59,14 @@ def create_local_information_disclosures(test_scores_path, output_csv_path):
 
 
 def process_experiment(experiment_dir):
-    test_scores_path = experiment_dir / "test_scores.csv"
+    test_scores_path = scores_path(experiment_dir, "test")
     if not test_scores_path.is_file():
         raise FileNotFoundError(f"Missing required test scores file: {test_scores_path}")
 
     print(SEPARATOR)
     print(f"Experiment: {experiment_dir.name}")
     print(SEPARATOR)
-    create_local_information_disclosures(
-        test_scores_path,
-        experiment_dir / "local_information_disclosures.csv",
-    )
+    create_local_information_disclosures(test_scores_path, lid_path(experiment_dir))
     print()
 
 

@@ -3,6 +3,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from experiment_paths import (
+    enrolment_embeddings_path,
+    original_embeddings_path,
+    scores_path,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
@@ -59,7 +64,7 @@ def compute_scores(embeddings_path, enroll_embeddings_path, trials_csv_path, out
 
 
 def process_experiment(experiment_dir):
-    embeddings_path = experiment_dir / "embeddings.parquet"
+    embeddings_path = original_embeddings_path(experiment_dir)
     if not embeddings_path.is_file():
         raise FileNotFoundError(f"Missing required embeddings file: {embeddings_path}")
 
@@ -67,7 +72,7 @@ def process_experiment(experiment_dir):
     print(f"Experiment: {experiment_dir.name}")
     print(SEPARATOR)
     for split, trials_csv_path in SPLITS.items():
-        enroll_embeddings_path = experiment_dir / f"{split}_enroll_embeddings.parquet"
+        enroll_embeddings_path = enrolment_embeddings_path(experiment_dir, split)
         if not enroll_embeddings_path.is_file():
             raise FileNotFoundError(
                 f"Missing required enrolment embeddings file: {enroll_embeddings_path}"
@@ -75,7 +80,7 @@ def process_experiment(experiment_dir):
         if not trials_csv_path.is_file():
             raise FileNotFoundError(f"Missing required trials file: {trials_csv_path}")
 
-        output_path = experiment_dir / f"{split}_scores.csv"
+        output_path = scores_path(experiment_dir, split)
         print(f"{split}:")
         compute_scores(embeddings_path, enroll_embeddings_path, trials_csv_path, output_path)
         print()
@@ -103,7 +108,8 @@ if __name__ == "__main__":
 
     print("Creating trial scores from speaker-level enrolment embeddings.")
     print("For each experiment, dev and test trial utterances are matched to")
-    print("embeddings.parquet, cosine-scored against each enrolment profile, and saved.\n")
+    print("embeddings/embeddings.parquet, cosine-scored against each enrolment profile, and")
+    print("saved under scores/.\n")
 
     if args.experiment:
         process_experiment(EXPERIMENTS_DIR / args.experiment)
