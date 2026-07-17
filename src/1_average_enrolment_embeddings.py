@@ -1,44 +1,51 @@
-import argparse
+"""
+Create speaker-level enrolment embeddings for the dev and test splits.
+
+For each experiment, this script loads utterance-level embeddings, selects the
+enrolment utterances listed in data/shared, L2-normalizes each utterance
+embedding, averages them per speaker, and saves one profile per speaker.
+
+Inputs:
+    data/shared/dev_enrolls.csv
+    data/shared/test_enrolls.csv
+    <experiment>/embeddings/embeddings.parquet
+
+Outputs:
+    <experiment>/embeddings/enrolment/dev_enroll_embeddings.parquet
+    <experiment>/embeddings/enrolment/test_enroll_embeddings.parquet
+"""
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 from experiment_paths import enrolment_embeddings_path, original_embeddings_path
+from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
+
 SHARED_DIR = PROJECT_ROOT / "data" / "shared"
-ENROLLMENT_SPLITS = {
+ENROLMENT_SPLITS = {
     "dev": SHARED_DIR / "dev_enrolls.csv",
     "test": SHARED_DIR / "test_enrolls.csv",
 }
-SEPARATOR = "-" * 72
 
 
-def relative_path(path):
-    return path.relative_to(PROJECT_ROOT)
 
 
-def average_enrollment_embeddings(embeddings_path, enroll_csv_path, output_parquet_path):
+def average_enrolment_embeddings(embeddings_path, enroll_csv_path, output_parquet_path):
     df_emb = pd.read_parquet(embeddings_path)
     df_enrolls = pd.read_csv(enroll_csv_path)
-    
-    # 1. Merge the enrollment list with the raw embeddings to extract the right vectors
+
     df_merged = df_enrolls.merge(
-        df_emb.drop(columns=["speaker_id"], errors="ignore"), 
-        on="utterance_id", 
-        how="inner"
+        df_emb.drop(columns=["speaker_id"], errors="ignore"),
+        on="utterance_id",
+        how="inner",
     )
 
-    # Function to L2 normalize utterance vectors, then average them per speaker
     def normalize_and_mean(embs):
         stacked = np.stack(embs.values)
-        # Normalize each individual utterance embedding
         normed = stacked / np.linalg.norm(stacked, axis=1, keepdims=True)
-        # Return the mean of these normalized embeddings
         return np.mean(normed, axis=0)
 
-    # 2. Group by speaker_id and apply the averaging function
     df_avg_enrolls = (
         df_merged.groupby("speaker_id")["embedding"]
         .apply(normalize_and_mean)
@@ -46,17 +53,15 @@ def average_enrollment_embeddings(embeddings_path, enroll_csv_path, output_parqu
     )
     utterances_per_profile = df_merged.groupby("speaker_id").size()
 
-    # 3. Save the resulting speaker profiles
-    Path(output_parquet_path).parent.mkdir(parents=True, exist_ok=True)
+    output_parquet_path.parent.mkdir(parents=True, exist_ok=True)
     df_avg_enrolls.to_parquet(output_parquet_path, engine="pyarrow", index=False)
 
-    print(
-        f"{len(df_avg_enrolls)} speaker profiles created by averaging "
-        f"{len(df_merged)} enrolment utterances "
-        f"(utterances per profile: min = {utterances_per_profile.min()}, "
-        f"max = {utterances_per_profile.max()})"
-    )
-    print(f"averaged embeddings saved in {relative_path(output_parquet_path)}")
+    return {
+        "speaker_profiles": len(df_avg_enrolls),
+        "enrolment_utterances": len(df_merged),
+        "min_utterances_per_profile": utterances_per_profile.min(),
+        "max_utterances_per_profile": utterances_per_profile.max(),
+    }
 
 
 def process_experiment(experiment_dir):
@@ -64,46 +69,68 @@ def process_experiment(experiment_dir):
     if not embeddings_path.is_file():
         raise FileNotFoundError(f"Missing required embeddings file: {embeddings_path}")
 
-    print(SEPARATOR)
-    print(f"Experiment: {experiment_dir.name}")
-    print(SEPARATOR)
-    for split, enroll_csv_path in ENROLLMENT_SPLITS.items():
+    split_summaries = {}
+    for split, enroll_csv_path in ENROLMENT_SPLITS.items():
         if not enroll_csv_path.is_file():
-            raise FileNotFoundError(f"Missing required enrollment file: {enroll_csv_path}")
+            raise FileNotFoundError(f"Missing required enrolment file: {enroll_csv_path}")
 
         output_path = enrolment_embeddings_path(experiment_dir, split)
-        print(f"{split}:")
-        average_enrollment_embeddings(embeddings_path, enroll_csv_path, output_path)
+        split_summaries[split] = average_enrolment_embeddings(
+            embeddings_path,
+            enroll_csv_path,
+            output_path,
+        )
+
+    return split_summaries
+
+
+def print_summary(processed_experiments, split_summaries):
+    print(f"Processing experiments: {', '.join(processed_experiments)}")
+    for split in ENROLMENT_SPLITS:
+
+        summaries = [summary[split] for summary in split_summaries]
+        speaker_counts = {summary["speaker_profiles"] for summary in summaries}
+        utterance_counts = {summary["enrolment_utterances"] for summary in summaries}
+        min_utterances = min(
+            summary["min_utterances_per_profile"] for summary in summaries
+        )
+        max_utterances = max(
+            summary["max_utterances_per_profile"] for summary in summaries
+        )
+
+        if len(speaker_counts) == 1 and len(utterance_counts) == 1:
+            speaker_text = f"{speaker_counts.pop()} speaker profiles"
+            utterance_text = f"{utterance_counts.pop()} enrolment utterances"
+        else:
+            speaker_text = f"{min(speaker_counts)}-{max(speaker_counts)} speaker profiles"
+            utterance_text = (
+                f"{min(utterance_counts)}-{max(utterance_counts)} enrolment utterances"
+            )
         print()
-
-
-def iter_experiment_dirs():
-    if not EXPERIMENTS_DIR.is_dir():
-        raise FileNotFoundError(f"Missing experiments directory: {EXPERIMENTS_DIR}")
-
-    experiment_dirs = sorted(path for path in EXPERIMENTS_DIR.iterdir() if path.is_dir())
-    if not experiment_dirs:
-        raise FileNotFoundError(f"No experiment directories found in: {EXPERIMENTS_DIR}")
-    return experiment_dirs
+        print(
+            f"{split}: {speaker_text} from {utterance_text} per experiment "
+            f"(utterances per profile: min = {min_utterances}, max = {max_utterances})"
+        )
+    print()
+    print("Aceraged embeddings are saved in each experiment's embeddings/enrolment/ directory.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Average enrollment embeddings per speaker.")
-    parser.add_argument(
-        "experiment",
-        nargs="?",
-        help="Experiment name under data/experiments. If omitted, all experiments are processed.",
-    )
-    
-    args = parser.parse_args()
+    print()
+    print(SEPARATOR)
 
-    print("Creating speaker-level enrolment embeddings.")
-    print("For each experiment, dev and test enrolment utterances are matched to")
-    print("embeddings/embeddings.parquet, L2-normalized, averaged per speaker, and saved")
-    print("under embeddings/enrolment/.\n")
+    print("STEP 1. Creating speaker-level enrolment embeddings.")
 
-    if args.experiment:
-        process_experiment(EXPERIMENTS_DIR / args.experiment)
-    else:
-        for experiment_dir in iter_experiment_dirs():
-            process_experiment(experiment_dir)
+    print(SEPARATOR)
+
+
+
+    processed_experiments = []
+    split_summaries = []
+    for experiment_dir in iter_experiment_dirs():
+        split_summaries.append(process_experiment(experiment_dir))
+        processed_experiments.append(experiment_dir.name)
+
+    print_summary(processed_experiments, split_summaries)
+    print(SEPARATOR2)
+    print()

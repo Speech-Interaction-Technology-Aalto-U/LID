@@ -8,6 +8,22 @@ wheels/
 
 # Virtual environments
 .venv
-results/
-data/experiments/
+
+# Generated pipeline outputs
+results/*
+!results/
+!results/paper_figures/
+!results/paper_figures/**
+
+# Experiment data: keep only original embedding files in git.
+!data/experiments/
+data/experiments/**
+!data/experiments/*/
+!data/experiments/*/embeddings/
+!data/experiments/*/embeddings/embeddings.parquet
+
+# Shared split definitions are source data.
+!data/shared/
+!data/shared/**
+
 .DS_Store

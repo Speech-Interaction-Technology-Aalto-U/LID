@@ -1,6 +1,27 @@
-import argparse
+"""
+Create experiment plots and summary tables for local information disclosure results.
+
+For each experiment, this script plots the test-trial probability and LID
+distributions. Across experiments, it writes a combined LID CCDF, a summary
+metrics table, calibration coefficients, and, when EER values are available, an
+EER-vs-information-disclosure scatter plot.
+
+Inputs:
+    <experiment>/outputs/local_information_disclosures.csv
+    <experiment>/outputs/calibration_parameters.json
+    results/experiments/<experiment>/results.json
+    results/experiments/<experiment>/alternative_metrics/results.json, optional
+
+Outputs:
+    results/experiments/<experiment>/plots/*.png and *.pdf
+    results/summary/summary_table.csv
+    results/summary/calibration_coeff.csv
+    results/summary/lid_combined_ccdf.png and .pdf
+    results/summary/eer_vs_infodisc_scatter.png and .pdf, when EER is available
+"""
+
 import json
-from pathlib import Path
+import shutil
 
 import matplotlib
 matplotlib.use("Agg")
@@ -9,18 +30,13 @@ import numpy as np
 import pandas as pd
 
 from experiment_paths import calibration_parameters_path, lid_path
+from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
 METRICS_FILE = "results.json"
 ALTERNATIVE_METRICS_DIR_NAME = "alternative_metrics"
 SUMMARY_DIR = PROJECT_ROOT / "results" / "summary"
-SEPARATOR = "-" * 72
-
-
-def relative_path(path):
-    return path.relative_to(PROJECT_ROOT)
+PAPER_FIGURES_DIR = PROJECT_ROOT / "results" / "paper_figures"
 
 
 def configure_matplotlib():
@@ -95,8 +111,7 @@ def plot_metric(
     plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
-    print(f"saved {relative_path(png_path)}")
-    print(f"saved {relative_path(pdf_path)}")
+    return [png_path, pdf_path]
 
 
 def get_n_enrolments(experiment_dir, df_lid):
@@ -129,7 +144,7 @@ def load_lid_dataframe(experiment_dir):
 def plot_probability_distribution(experiment_dir, df_lid, out_dir):
     n_enrolments = get_n_enrolments(experiment_dir, df_lid)
 
-    plot_metric(
+    return plot_metric(
         df_lid,
         column="p",
         title=f"Target Recognition Probability Distribution ({experiment_dir.name})",
@@ -142,7 +157,7 @@ def plot_probability_distribution(experiment_dir, df_lid, out_dir):
 
 
 def plot_lid_distribution(experiment_dir, df_lid, out_dir):
-    plot_metric(
+    return plot_metric(
         df_lid,
         column="LID",
         title=f"Local Information Disclosure Distribution ({experiment_dir.name})",
@@ -240,32 +255,22 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
     plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
-    print(f"saved {relative_path(png_path)}")
-    print(f"saved {relative_path(pdf_path)}")
+    return [png_path, pdf_path]
 
 
 def process_experiment(experiment_dir):
-    print(SEPARATOR)
-    print(f"Experiment: {experiment_dir.name}")
-    print(SEPARATOR)
-
     df_lid = load_lid_dataframe(experiment_dir)
     out_dir = RESULTS_DIR / experiment_dir.name / "plots"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_probability_distribution(experiment_dir, df_lid, out_dir)
-    plot_lid_distribution(experiment_dir, df_lid, out_dir)
-    print()
+    plot_paths = []
+    plot_paths.extend(plot_probability_distribution(experiment_dir, df_lid, out_dir))
+    plot_paths.extend(plot_lid_distribution(experiment_dir, df_lid, out_dir))
 
-
-def iter_experiment_dirs():
-    if not EXPERIMENTS_DIR.is_dir():
-        raise FileNotFoundError(f"Missing experiments directory: {EXPERIMENTS_DIR}")
-
-    experiment_dirs = sorted(path for path in EXPERIMENTS_DIR.iterdir() if path.is_dir())
-    if not experiment_dirs:
-        raise FileNotFoundError(f"No experiment directories found in: {EXPERIMENTS_DIR}")
-    return experiment_dirs
+    return {
+        "experiment": experiment_dir.name,
+        "plots": len(plot_paths),
+    }
 
 
 def build_summary_table(experiment_dirs, out_dir):
@@ -280,36 +285,62 @@ def build_summary_table(experiment_dirs, out_dir):
 
         if not metrics_path.is_file():
             raise FileNotFoundError(f"Missing required metrics file: {metrics_path}")
-        if not alt_metrics_path.is_file():
-            raise FileNotFoundError(
-                f"Missing required alternative metrics file: {alt_metrics_path}"
-            )
 
         metrics = json.loads(metrics_path.read_text())
-        alt_metrics = json.loads(alt_metrics_path.read_text())
-        rows.append(
-            {
-                "Experiment": experiment_dir.name,
-                "EER": float(alt_metrics["EER"]),
-                "Cllr": float(alt_metrics["cllr"]),
-                "ALID": float(metrics["ALID"]),
-                "PDR": float(metrics["PDR"]),
-                "NDR": float(metrics["NDR"]),
-                "LID+": float(metrics["LID+"])
-                if metrics["LID+"] is not None
-                else np.nan,
-                "LID-": float(metrics["LID-"])
-                if metrics["LID-"] is not None
-                else np.nan,
-                "LID_max": float(metrics["LID_max"]),
-            }
-        )
+        row = {
+            "Experiment": experiment_dir.name,
+            "ALID": float(metrics["ALID"]),
+            "PDR": float(metrics["PDR"]),
+            "NDR": float(metrics["NDR"]),
+            "LID+": float(metrics["LID+"]) if metrics["LID+"] is not None else np.nan,
+            "LID-": float(metrics["LID-"]) if metrics["LID-"] is not None else np.nan,
+            "LID_max": float(metrics["LID_max"]),
+        }
 
-    df_summary = pd.DataFrame(rows).sort_values("EER").reset_index(drop=True)
+        if alt_metrics_path.is_file():
+            alt_metrics = json.loads(alt_metrics_path.read_text())
+            if "EER" in alt_metrics and alt_metrics["EER"] is not None:
+                row["EER"] = float(alt_metrics["EER"])
+            if "cllr" in alt_metrics and alt_metrics["cllr"] is not None:
+                row["Cllr"] = float(alt_metrics["cllr"])
+
+        rows.append(row)
+
+    df_summary = pd.DataFrame(rows)
+    optional_columns = ["EER", "Cllr"]
+    empty_optional_columns = [
+        column
+        for column in optional_columns
+        if column in df_summary and not df_summary[column].notna().any()
+    ]
+    df_summary = df_summary.drop(columns=empty_optional_columns)
+
+    if "EER" in df_summary:
+        df_summary = df_summary.sort_values("EER", na_position="last")
+    else:
+        df_summary = df_summary.sort_values("Experiment")
+    df_summary = df_summary.reset_index(drop=True)
+
+    ordered_columns = [
+        column
+        for column in [
+            "Experiment",
+            "EER",
+            "Cllr",
+            "ALID",
+            "PDR",
+            "NDR",
+            "LID+",
+            "LID-",
+            "LID_max",
+        ]
+        if column in df_summary
+    ]
+    df_summary = df_summary[ordered_columns]
+
     summary_path = out_dir / "summary_table.csv"
     df_summary.to_csv(summary_path, index=False)
-    print(f"saved {relative_path(summary_path)}")
-    return df_summary
+    return df_summary, summary_path
 
 
 def build_calibration_coeff_table(experiment_dirs, out_dir):
@@ -339,10 +370,13 @@ def build_calibration_coeff_table(experiment_dirs, out_dir):
 
     calibration_path = out_dir / "calibration_coeff.csv"
     pd.DataFrame(rows).to_csv(calibration_path, index=False)
-    print(f"saved {relative_path(calibration_path)}")
+    return calibration_path
 
 
 def plot_summary_visuals(df_summary, out_dir):
+    if "EER" not in df_summary:
+        return []
+
     out_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -350,9 +384,11 @@ def plot_summary_visuals(df_summary, out_dir):
     except OSError:
         pass
 
-    df_plot = df_summary[df_summary["Experiment"] != "plain"].copy()
+    df_plot = df_summary[
+        (df_summary["Experiment"] != "plain") & df_summary["EER"].notna()
+    ].copy()
     if df_plot.empty:
-        raise ValueError("No experiments available for summary plotting after filtering.")
+        return []
 
     x_vals = df_plot["EER"]
 
@@ -485,8 +521,132 @@ def plot_summary_visuals(df_summary, out_dir):
     plt.savefig(scatter_pdf_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
-    print(f"saved {relative_path(scatter_png_path)}")
-    print(f"saved {relative_path(scatter_pdf_path)}")
+    return [scatter_png_path, scatter_pdf_path]
+
+
+def format_table_value(value):
+    if pd.isna(value):
+        return "n/a"
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
+
+
+def print_dataframe_table(df):
+    rows = [
+        [format_table_value(row[column]) for column in df.columns]
+        for _, row in df.iterrows()
+    ]
+    widths = [
+        max(len(column), *(len(row[index]) for row in rows))
+        for index, column in enumerate(df.columns)
+    ]
+
+    header_row = "  ".join(
+        column.ljust(widths[index]) for index, column in enumerate(df.columns)
+    )
+    separator_row = "  ".join("-" * width for width in widths)
+    print(header_row)
+    print(separator_row)
+    for row in rows:
+        print(
+            "  ".join(
+                value.rjust(widths[index]) if index else value.ljust(widths[index])
+                for index, value in enumerate(row)
+            )
+        )
+
+
+def copy_figure_pair(source_path, figure_name, out_dir, required=True):
+    copied_paths = []
+    for suffix in (".png", ".pdf"):
+        source = source_path.with_suffix(suffix)
+        if not source.is_file():
+            if required:
+                raise FileNotFoundError(f"Missing required figure source: {source}")
+            continue
+
+        destination = out_dir / f"{figure_name}{suffix}"
+        shutil.copy2(source, destination)
+        copied_paths.append(destination)
+
+    return copied_paths
+
+
+def save_rounded_table(source_csv_path, table_name, out_dir):
+    if not source_csv_path.is_file():
+        raise FileNotFoundError(f"Missing required table source: {source_csv_path}")
+
+    destination = out_dir / f"{table_name}.csv"
+    df = pd.read_csv(source_csv_path)
+    numeric_columns = df.select_dtypes(include="number").columns
+    df[numeric_columns] = df[numeric_columns].mask(
+        df[numeric_columns].abs() < 0.005,
+        0.0,
+    )
+    df.round(2).to_csv(destination, index=False, float_format="%.2f")
+    return destination
+
+
+def export_paper_figures():
+    PAPER_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
+    t10_plots_dir = RESULTS_DIR / "T10-2" / "plots"
+    exported_paths = []
+    skipped = []
+
+    exported_paths.extend(
+        copy_figure_pair(
+            t10_plots_dir / "probability_distribution.pdf",
+            "Figure2",
+            PAPER_FIGURES_DIR,
+        )
+    )
+    exported_paths.extend(
+        copy_figure_pair(
+            t10_plots_dir / "lid_distribution.png",
+            "Figure3",
+            PAPER_FIGURES_DIR,
+        )
+    )
+    exported_paths.extend(
+        copy_figure_pair(
+            SUMMARY_DIR / "lid_combined_ccdf.png",
+            "Figure4",
+            PAPER_FIGURES_DIR,
+        )
+    )
+
+    figure5_paths = copy_figure_pair(
+        SUMMARY_DIR / "eer_vs_infodisc_scatter.png",
+        "Figure5",
+        PAPER_FIGURES_DIR,
+        required=False,
+    )
+    if figure5_paths:
+        exported_paths.extend(figure5_paths)
+    else:
+        skipped.append("Figure5")
+
+    exported_paths.append(
+        save_rounded_table(
+            SUMMARY_DIR / "calibration_coeff.csv",
+            "Table3",
+            PAPER_FIGURES_DIR,
+        )
+    )
+    exported_paths.append(
+        save_rounded_table(
+            SUMMARY_DIR / "summary_table.csv",
+            "Table4",
+            PAPER_FIGURES_DIR,
+        )
+    )
+
+    return {
+        "files": len(exported_paths),
+        "skipped": skipped,
+    }
 
 
 def plot_combined_summary(experiment_dirs):
@@ -495,34 +655,55 @@ def plot_combined_summary(experiment_dirs):
         df_lid = load_lid_dataframe(experiment_dir)
         all_lid_data[experiment_dir.name] = df_lid["LID"].to_numpy()
 
-    plot_combined_lid_ccdf(all_lid_data, SUMMARY_DIR)
-    df_summary = build_summary_table(experiment_dirs, SUMMARY_DIR)
-    build_calibration_coeff_table(experiment_dirs, SUMMARY_DIR)
-    plot_summary_visuals(df_summary, SUMMARY_DIR)
+    summary_paths = []
+    summary_paths.extend(plot_combined_lid_ccdf(all_lid_data, SUMMARY_DIR))
+    df_summary, summary_table_path = build_summary_table(experiment_dirs, SUMMARY_DIR)
+    summary_paths.append(summary_table_path)
+    summary_paths.append(build_calibration_coeff_table(experiment_dirs, SUMMARY_DIR))
+    eer_plot_paths = plot_summary_visuals(df_summary, SUMMARY_DIR)
+    summary_paths.extend(eer_plot_paths)
+    paper_export_summary = export_paper_figures()
+
+    return {
+        "summary_table": df_summary,
+        "summary_files": len(summary_paths),
+        "eer_plot_created": bool(eer_plot_paths),
+        "paper_files": paper_export_summary["files"],
+        "paper_skipped": paper_export_summary["skipped"],
+    }
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Plot local information disclosure results.")
-    parser.add_argument(
-        "experiment",
-        nargs="?",
-        help="Experiment name under data/experiments. If omitted, all experiments are processed.",
-    )
-
-    args = parser.parse_args()
-
     configure_matplotlib()
 
-    print("Plotting local information disclosure results.")
-    print("For each experiment, probability and LID histograms are saved as PNG and PDF")
-    print("under results/experiments/{experiment}/plots.")
-    print("When all experiments are processed, combined summary plots and a metrics table")
-    print("are saved under results/experiments/summary.\n")
+    print()
+    print(SEPARATOR)
+    print("STEP 6. Plotting local information disclosure results.")
+    print(SEPARATOR)
+    print(
+        "Creating probability/LID histograms, combined summaries, and paper artifacts."
+    )
+    print()
 
-    if args.experiment:
-        process_experiment(EXPERIMENTS_DIR / args.experiment)
-    else:
-        experiment_dirs = iter_experiment_dirs()
-        for experiment_dir in experiment_dirs:
-            process_experiment(experiment_dir)
-        plot_combined_summary(experiment_dirs)
+    experiment_dirs = iter_experiment_dirs()
+    experiment_summaries = []
+    for experiment_dir in experiment_dirs:
+        experiment_summaries.append(process_experiment(experiment_dir))
+    summary = plot_combined_summary(experiment_dirs)
+
+    total_experiment_plots = sum(item["plots"] for item in experiment_summaries)
+    print(f"Generated {total_experiment_plots} per-experiment plot files.")
+    print(f"Generated {summary['summary_files']} summary files.")
+    print(f"Exported {summary['paper_files']} paper figure/table files.")
+    if not summary["eer_plot_created"]:
+        print("Skipped EER vs information disclosure plot because EER is unavailable.")
+    for item in summary["paper_skipped"]:
+        print(f"Skipped {item} paper export because its source figure is unavailable.")
+    print()
+    print_dataframe_table(summary["summary_table"])
+    print()
+    print("Plots are saved in results/experiments/<experiment>/plots/.")
+    print("Summary outputs can be found in results/summary/.")
+    print("Paper artifacts can be found in results/paper_figures/.")
+    print(SEPARATOR2)
+    print()

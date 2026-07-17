@@ -1,17 +1,29 @@
-import argparse
+"""
+Create local information disclosure values from calibrated test scores.
+
+For each experiment, this script selects the mated enrolment (target speaker) probability for
+each test trial and converts it to local information disclosure in bits:
+LID = log2(N * p), where N is the number of enrolment profiles.
+
+
+Inputs:
+    <experiment>/scores/test_scores.csv with p and ln_p (for numerical stability, we use ln_p instead of p)
+
+Outputs:
+    <experiment>/outputs/local_information_disclosures.csv
+"""
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 from experiment_paths import lid_path, scores_path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
-SEPARATOR = "-" * 72
+from tools.utils import iter_experiment_dirs, SEPARATOR, SEPARATOR2
 
 
-def relative_path(path):
-    return path.relative_to(PROJECT_ROOT)
+def count_text(values, label):
+    if len(values) == 1:
+        return f"{values.pop()} {label}"
+    return f"{min(values)}-{max(values)} {label}"
 
 
 def create_local_information_disclosures(test_scores_path, output_csv_path):
@@ -51,11 +63,10 @@ def create_local_information_disclosures(test_scores_path, output_csv_path):
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     df_lid.to_csv(output_csv_path, index=False)
 
-    print(
-        f"{len(df_lid)} local information disclosure values created "
-        f"using {n_enrolments} enrolments"
-    )
-    print(f"local information disclosures saved in {relative_path(output_csv_path)}")
+    return {
+        "lid_values": len(df_lid),
+        "enrolments": n_enrolments,
+    }
 
 
 def process_experiment(experiment_dir):
@@ -63,40 +74,30 @@ def process_experiment(experiment_dir):
     if not test_scores_path.is_file():
         raise FileNotFoundError(f"Missing required test scores file: {test_scores_path}")
 
-    print(SEPARATOR)
-    print(f"Experiment: {experiment_dir.name}")
-    print(SEPARATOR)
-    create_local_information_disclosures(test_scores_path, lid_path(experiment_dir))
+    return create_local_information_disclosures(test_scores_path, lid_path(experiment_dir))
+
+
+def print_summary(experiment_summaries):
+    lid_text = count_text(
+        {summary["lid_values"] for summary in experiment_summaries},
+        "LID values",
+    )
+
+    print(f"[test]: {lid_text} computed")
     print()
-
-
-def iter_experiment_dirs():
-    if not EXPERIMENTS_DIR.is_dir():
-        raise FileNotFoundError(f"Missing experiments directory: {EXPERIMENTS_DIR}")
-
-    experiment_dirs = sorted(path for path in EXPERIMENTS_DIR.iterdir() if path.is_dir())
-    if not experiment_dirs:
-        raise FileNotFoundError(f"No experiment directories found in: {EXPERIMENTS_DIR}")
-    return experiment_dirs
+    print("The LID scores are saved in each experiment's outputs/ directory.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Create local information disclosure values.")
-    parser.add_argument(
-        "experiment",
-        nargs="?",
-        help="Experiment name under data/experiments. If omitted, all experiments are processed.",
-    )
+    print()
+    print(SEPARATOR)
+    print("STEP 4. Creating local information disclosure values for each trial.")
+    print(SEPARATOR)
 
-    args = parser.parse_args()
+    experiment_summaries = []
+    for experiment_dir in iter_experiment_dirs():
+        experiment_summaries.append(process_experiment(experiment_dir))
 
-    print("Creating local information disclosure values.")
-    print("For each test trial, the mated enrolment probability is selected and")
-    print("converted to LID bits using LID = log2(N * p).")
-    print("The calculation uses ln_p internally for numerical stability.\n")
-
-    if args.experiment:
-        process_experiment(EXPERIMENTS_DIR / args.experiment)
-    else:
-        for experiment_dir in iter_experiment_dirs():
-            process_experiment(experiment_dir)
+    print_summary(experiment_summaries)
+    print(SEPARATOR2)
+    print()

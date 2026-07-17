@@ -112,7 +112,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=(
             "Generate random embeddings matching the B3_ECAPA parquet schema for "
-            "utterances listed under data/shared."
+            "utterances listed in data/shared."
         )
     )
     parser.add_argument(

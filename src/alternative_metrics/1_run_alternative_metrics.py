@@ -1,28 +1,41 @@
-import argparse
+"""
+Compute alternative verification metrics from test similarity scores.
+
+For each experiment, this script computes EER and Cllr from raw test scores and
+saves an EER distribution plot, a PAV calibration plot, and a metrics JSON file.
+
+Inputs:
+    <experiment>/scores/test_scores.csv
+
+Outputs:
+    results/experiments/<experiment>/alternative_metrics/results.json
+    results/experiments/<experiment>/alternative_metrics/eer_distribution.png and .pdf
+    results/experiments/<experiment>/alternative_metrics/pav_calibration.png and .pdf
+"""
+
 import json
 from pathlib import Path
 import sys
-
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
+from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
 from cllr import compute_cllr, plot_pav_calibration
-from eer import compute_eer, plot_eer_histogram
+from eer import plot_eer_histogram
 from experiment_paths import scores_path
 
-EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+    
+ALTERNATIVE_METRICS_DIR = PROJECT_ROOT / "src" / "alternative_metrics"
+if str(ALTERNATIVE_METRICS_DIR) not in sys.path:
+    sys.path.insert(0, str(ALTERNATIVE_METRICS_DIR))
+
+
+
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
 OUTPUT_DIR_NAME = "alternative_metrics"
 OUTPUT_FILE = "results.json"
-SEPARATOR = "-" * 72
-
-
-def relative_path(path):
-    return path.relative_to(PROJECT_ROOT)
 
 
 def split_target_and_non_target_scores(df_scores, score_column):
@@ -64,18 +77,21 @@ def compute_alternative_metrics(test_scores_path, output_dir):
     )
 
     metrics = {
-        "EER": compute_eer(target_scores, non_target_scores),
+        "EER": float(eer_plot["eer"]),
         "cllr": compute_cllr(df_scores),
     }
     output_json_path.write_text(json.dumps(metrics, indent=2) + "\n")
 
-    print(f"alternative metrics saved in {relative_path(output_json_path)}")
-    print(f"saved {relative_path(eer_plot['png_path'])}")
-    print(f"saved {relative_path(eer_plot['pdf_path'])}")
-    print(f"saved {relative_path(pav_plot['png_path'])}")
-    print(f"saved {relative_path(pav_plot['pdf_path'])}")
-    print(f"EER = {metrics['EER']:.6g}")
-    print(f"cllr = {metrics['cllr']:.6g}")
+    return {
+        "metrics": metrics,
+        "files": [
+            output_json_path,
+            eer_plot["png_path"],
+            eer_plot["pdf_path"],
+            pav_plot["png_path"],
+            pav_plot["pdf_path"],
+        ],
+    }
 
 
 def process_experiment(experiment_dir):
@@ -85,41 +101,68 @@ def process_experiment(experiment_dir):
 
     output_dir = RESULTS_DIR / experiment_dir.name / OUTPUT_DIR_NAME
 
-    print(SEPARATOR)
-    print(f"Experiment: {experiment_dir.name}")
-    print(SEPARATOR)
-    compute_alternative_metrics(test_scores_path, output_dir)
-    print()
+    summary = compute_alternative_metrics(test_scores_path, output_dir)
+    return {
+        "experiment": experiment_dir.name,
+        **summary["metrics"],
+        "files": len(summary["files"]),
+    }
 
 
-def iter_experiment_dirs():
-    if not EXPERIMENTS_DIR.is_dir():
-        raise FileNotFoundError(f"Missing experiments directory: {EXPERIMENTS_DIR}")
+def format_metric(value):
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
 
-    experiment_dirs = sorted(path for path in EXPERIMENTS_DIR.iterdir() if path.is_dir())
-    if not experiment_dirs:
-        raise FileNotFoundError(f"No experiment directories found in: {EXPERIMENTS_DIR}")
-    return experiment_dirs
+
+def print_results_table(experiment_summaries):
+    columns = [
+        ("Experiment", "experiment"),
+        ("EER", "EER"),
+        ("Cllr", "cllr"),
+    ]
+    rows = [
+        [format_metric(summary[key]) for _, key in columns]
+        for summary in experiment_summaries
+    ]
+    widths = [
+        max(len(header), *(len(row[index]) for row in rows))
+        for index, (header, _) in enumerate(columns)
+    ]
+
+    print(
+        "  ".join(
+            header.ljust(widths[index])
+            for index, (header, _) in enumerate(columns)
+        )
+    )
+    print("  ".join("-" * width for width in widths))
+    for row in rows:
+        print(
+            "  ".join(
+                value.rjust(widths[index]) if index else value.ljust(widths[index])
+                for index, value in enumerate(row)
+            )
+        )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compute alternative speaker recognition metrics.")
-    parser.add_argument(
-        "experiment",
-        nargs="?",
-        help="Experiment name under data/experiments. If omitted, all experiments are processed.",
-    )
+    print()
+    print(SEPARATOR)
+    print("Computing alternative privacy metrics.")
+    print(SEPARATOR)
+    print("Computing EER and Cllr from raw test similarity scores. Generating explanatory plots.")
+    print()
 
-    args = parser.parse_args()
+    experiment_summaries = []
+    for experiment_dir in iter_experiment_dirs():
+        experiment_summaries.append(process_experiment(experiment_dir))
 
-    print("Computing alternative metrics.")
-    print("For each experiment, EER is computed from test similarity scores")
-    print("and cllr is computed from raw similarity scores via isotonic regression.")
-    print("An EER plot and a PAV calibration plot are also saved")
-    print("under results/experiments/{experiment}/alternative_metrics.\n")
-
-    if args.experiment:
-        process_experiment(EXPERIMENTS_DIR / args.experiment)
-    else:
-        for experiment_dir in iter_experiment_dirs():
-            process_experiment(experiment_dir)
+    total_files = sum(summary["files"] for summary in experiment_summaries)
+    print(f"Generated {total_files} alternative metric files.")
+    print()
+    print_results_table(experiment_summaries)
+    print()
+    print("Saved under results/experiments/<experiment>/alternative_metrics/.")
+    print(SEPARATOR2)
+    print()

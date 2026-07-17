@@ -1,21 +1,32 @@
-import argparse
+"""
+Calibrate test similarity scores using dev dataset.
+
+This script 
+1. z-normalizes scores within each trial,
+2. fits a balanced one-dimensional logistic regression on the dev z-scores, 
+3. applies the learned calibration to obtain log-likelihood ratios (LLRs) for the test dataset (using z-scores)
+4. converts the LLRs into per-trial enrolment probabilities. These probabilities denote the confidence that the attacker has about each of the persons being the target speaker. (all probabilities per trial add up to 1)
+
+Inputs:
+    <experiment>/scores/dev_scores.csv
+    <experiment>/scores/test_scores.csv
+
+Outputs:
+    <experiment>/scores/dev_scores.csv with z_score
+    <experiment>/scores/test_scores.csv with z_score, llr, ln_p, and p
+    <experiment>/outputs/calibration_parameters.json
+"""
+
 import json
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from scipy.special import logsumexp
 from sklearn.linear_model import LogisticRegression
 
 from experiment_paths import calibration_parameters_path, scores_path
+from tools.utils import iter_experiment_dirs, SEPARATOR, SEPARATOR2
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENTS_DIR = PROJECT_ROOT / "data" / "experiments"
 SPLITS = ("dev", "test")
-SEPARATOR = "-" * 72
-
-
-def relative_path(path):
-    return path.relative_to(PROJECT_ROOT)
 
 
 def add_trial_z_scores(scores_csv_path):
@@ -29,7 +40,9 @@ def add_trial_z_scores(scores_csv_path):
 
     grouped_scores = df_scores.groupby("trial_id")["score"]
     trial_means = grouped_scores.transform("mean")
-    trial_stds = grouped_scores.transform('std', ddof=1) # ddof=0 corresponds to the population variance, but ddof=1 corresponds to the sample variance (where we don't have the full population). We stick to the sample variance because we are just estimating the variance of the population (we don't know it). This is the reason why the variance of each z-normalized row is not exactly 1.
+    # Use the sample standard deviation because each trial row estimates a larger
+    # score distribution; this means normalized rows need not have variance 1.
+    trial_stds = grouped_scores.transform("std", ddof=1)
     if (trial_stds == 0).any():
         zero_variance_trials = df_scores.loc[trial_stds == 0, "trial_id"].unique()
         raise ValueError(
@@ -40,11 +53,10 @@ def add_trial_z_scores(scores_csv_path):
     df_scores["z_score"] = (df_scores["score"] - trial_means) / trial_stds
     df_scores.to_csv(scores_csv_path, index=False)
 
-    print(
-        f"z_score added for {df_scores['trial_id'].nunique()} trials "
-        f"(containing {len(df_scores)} scores)"
-    )
-    print(f"calibrated scores appended to {relative_path(scores_csv_path)}")
+    return {
+        "trials": df_scores["trial_id"].nunique(),
+        "scores": len(df_scores),
+    }
 
 
 def fit_dev_logistic_regression(dev_scores_path, output_json_path):
@@ -80,12 +92,6 @@ def fit_dev_logistic_regression(dev_scores_path, output_json_path):
     output_json_path.parent.mkdir(parents=True, exist_ok=True)
     output_json_path.write_text(json.dumps(parameters, indent=2) + "\n")
 
-    print(
-        f"dev-only logistic regression fitted on {parameters['n_scores']} scores "
-        f"({parameters['n_mated']} mated, {parameters['n_non_mated']} non-mated)"
-    )
-    print(f"LLR parameters: weight = {weight:.6g}, intercept = {intercept:.6g}")
-    print(f"parameters saved in {relative_path(output_json_path)}")
     return parameters
 
 
@@ -97,8 +103,7 @@ def apply_llr_to_scores(scores_csv_path, parameters):
     df_scores["llr"] = parameters["w"] * df_scores["z_score"] + parameters["b"]
     df_scores.to_csv(scores_csv_path, index=False)
 
-    print(f"LLR scores added for {len(df_scores)} scores")
-    print(f"LLR scores appended to {relative_path(scores_csv_path)}")
+    return {"scores": len(df_scores)}
 
 
 def add_trial_probabilities(scores_csv_path):
@@ -112,68 +117,92 @@ def add_trial_probabilities(scores_csv_path):
     df_scores["p"] = np.exp(df_scores["ln_p"])
     df_scores.to_csv(scores_csv_path, index=False)
 
-    print(f"natural-log probabilities added for {df_scores['trial_id'].nunique()} trial utterances")
-    print(f"probabilities derived from ln_p and appended to {relative_path(scores_csv_path)}")
+    return {
+        "trials": df_scores["trial_id"].nunique(),
+        "scores": len(df_scores),
+    }
 
 
 def process_experiment(experiment_dir):
-    print(SEPARATOR)
-    print(f"Experiment: {experiment_dir.name}")
-    print(SEPARATOR)
+    z_score_summaries = {}
     for split in SPLITS:
         split_scores_path = scores_path(experiment_dir, split)
         if not split_scores_path.is_file():
             raise FileNotFoundError(f"Missing required scores file: {split_scores_path}")
 
-        print(f"{split}:")
-        add_trial_z_scores(split_scores_path)
-        print()
+        z_score_summaries[split] = add_trial_z_scores(split_scores_path)
 
-    print("dev calibration model:")
     parameters = fit_dev_logistic_regression(
         scores_path(experiment_dir, "dev"),
         calibration_parameters_path(experiment_dir),
     )
+
+    llr_summary = apply_llr_to_scores(scores_path(experiment_dir, "test"), parameters)
+    probability_summary = add_trial_probabilities(scores_path(experiment_dir, "test"))
+
+    return {
+        "z_scores": z_score_summaries,
+        "parameters": parameters,
+        "llr": llr_summary,
+        "probabilities": probability_summary,
+    }
+
+
+def count_text(values, label):
+    if len(values) == 1:
+        return f"{values.pop()} {label}"
+    return f"{min(values)}-{max(values)} {label}"
+
+
+def print_summary(processed_experiments, experiment_summaries):
+    for split in SPLITS:
+        summaries = [summary["z_scores"][split] for summary in experiment_summaries]
+        score_text = count_text(
+            {summary["scores"] for summary in summaries},
+            "z_scores",
+        )
+        print(f"[{split}]: {score_text} computed")
     print()
 
-    print("test LLR scores:")
-    apply_llr_to_scores(scores_path(experiment_dir, "test"), parameters)
+    print("Computed calibration parameters (for LLR = w*z_score + b):")
+    for experiment_name, summary in zip(processed_experiments, experiment_summaries):
+        parameters = summary["parameters"]
+        print(
+            f"{experiment_name}: w={parameters['w']:.6g}, b={parameters['b']:.6g}"
+        )
     print()
 
-    print("test probabilities:")
-    add_trial_probabilities(scores_path(experiment_dir, "test"))
+    llr_counts = {summary["llr"]["scores"] for summary in experiment_summaries}
+    probability_counts = {
+        summary["probabilities"]["scores"] for summary in experiment_summaries
+    }
+    test_count_text = count_text(
+        llr_counts | probability_counts,
+        "LLR scores and probabilities",
+    )
+    print(f"[test]: {test_count_text} computed")
     print()
-
-
-def iter_experiment_dirs():
-    if not EXPERIMENTS_DIR.is_dir():
-        raise FileNotFoundError(f"Missing experiments directory: {EXPERIMENTS_DIR}")
-
-    experiment_dirs = sorted(path for path in EXPERIMENTS_DIR.iterdir() if path.is_dir())
-    if not experiment_dirs:
-        raise FileNotFoundError(f"No experiment directories found in: {EXPERIMENTS_DIR}")
-    return experiment_dirs
+    print("Updated the existing score files in each experiment's scores/ directory.")
+    print("Saved the calibration parameters in each experiment's outputs/ directory.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Calibrate trial scores.")
-    parser.add_argument(
-        "experiment",
-        nargs="?",
-        help="Experiment name under data/experiments. If omitted, all experiments are processed.",
+    print()
+    print(SEPARATOR)
+    print("STEP 3. Calibrating similarity scores.")
+    print(SEPARATOR)
+    print(
+        "Z-normalizing dev/test scores per trial, using dev scores to learn calibration parameters, "
+        "and calibrating test scores to LLRs and obtaining probabilities."
     )
+    print()
 
-    args = parser.parse_args()
+    processed_experiments = []
+    experiment_summaries = []
+    for experiment_dir in iter_experiment_dirs():
+        experiment_summaries.append(process_experiment(experiment_dir))
+        processed_experiments.append(experiment_dir.name)
 
-    print("Calibrating trial scores.")
-    print("For each experiment, dev and test scores are z-normalized per trial_id.")
-    print("Then a balanced logistic regression is fit using dev z_score only.")
-    print("The learned dev parameters are applied to test z_score to append LLR scores.")
-    print("Test LLR scores are converted to per-trial enrolment probabilities.")
-    print("Original score values are kept unchanged.\n")
-
-    if args.experiment:
-        process_experiment(EXPERIMENTS_DIR / args.experiment)
-    else:
-        for experiment_dir in iter_experiment_dirs():
-            process_experiment(experiment_dir)
+    print_summary(processed_experiments, experiment_summaries)
+    print(SEPARATOR2)
+    print()
