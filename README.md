@@ -13,6 +13,21 @@ Speech privacy is a measurable outcome of the interaction between three distinct
 
 Change any of these three, and the evaluation outcome changes. This code base evaluates a single snapshot of interaction between the three.
 
+
+## Quick Start
+
+We use [`uv`](https://docs.astral.sh/uv/). 
+
+```bash
+# Install uv if you do not have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies and execute the full evaluation pipeline
+uv sync
+uv run src/run_all_results.py
+```
+
+
 ## Data & Components
 
 Our framework requires two distinct datasets with non-overlapping speaker identities:
@@ -28,20 +43,6 @@ The pipeline treats every subfolder within `data/experiments/` as a distinct eva
 
 *Required columns:* `utterance_id`, `speaker_id`, `embedding`.
 
-## Quick Start
-
-We use [`uv`](https://docs.astral.sh/uv/). 
-
-```bash
-# Install uv if you do not have it
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies and execute the full evaluation pipeline
-uv sync
-uv run src/run_all_results.py
-```
-
-*Note: Intermediate pipeline outputs are intentionally `.gitignore`d, as they are fully reproducible via the command above.*
 
 ## Evaluating Custom Experiments
 
