@@ -213,19 +213,19 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
             linestyle=linestyle,
         )
 
-    ax.axvline(
-        x=0.0,
-        color="red",
-        linestyle="dotted",
-        linewidth=1.5,
-        label="No information disclosure",
-    )
+    # ax.axvline(
+    #     x=0.0,
+    #     color="red",
+    #     linestyle="dotted",
+    #     linewidth=1.5,
+    #     label="No information disclosure",
+    # )
     ax.set_title("Combined Local Information Disclosure CCDF")
     ax.set_xlabel("Local Information Disclosure (bits)")
     ax.set_ylabel("CCDF (%)")
     ax.set_ylim([0.0, 100.0])
     ax.legend(
-        loc="upper right",
+        loc="lower left",
         framealpha=0.9,
         borderaxespad=0.2,
         borderpad=0.4,
