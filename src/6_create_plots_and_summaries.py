@@ -29,8 +29,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from experiment_paths import calibration_parameters_path, lid_path
-from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
+from tools.utils import (
+    PROJECT_ROOT,
+    calibration_parameters_path,
+    iter_experiment_dirs,
+    lid_path,
+    SEPARATOR,
+    SEPARATOR2,
+)
 
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
 METRICS_FILE = "results.json"
@@ -557,20 +563,16 @@ def print_dataframe_table(df):
         )
 
 
-def copy_figure_pair(source_path, figure_name, out_dir, required=True):
-    copied_paths = []
-    for suffix in (".png", ".pdf"):
-        source = source_path.with_suffix(suffix)
-        if not source.is_file():
-            if required:
-                raise FileNotFoundError(f"Missing required figure source: {source}")
-            continue
+def copy_pdf_figure(source_path, figure_name, out_dir, required=True):
+    source = source_path.with_suffix(".pdf")
+    if not source.is_file():
+        if required:
+            raise FileNotFoundError(f"Missing required figure source: {source}")
+        return None
 
-        destination = out_dir / f"{figure_name}{suffix}"
-        shutil.copy2(source, destination)
-        copied_paths.append(destination)
-
-    return copied_paths
+    destination = out_dir / f"{figure_name}.pdf"
+    shutil.copy2(source, destination)
+    return destination
 
 
 def save_rounded_table(source_csv_path, table_name, out_dir):
@@ -595,36 +597,36 @@ def export_paper_figures():
     exported_paths = []
     skipped = []
 
-    exported_paths.extend(
-        copy_figure_pair(
+    exported_paths.append(
+        copy_pdf_figure(
             t10_plots_dir / "probability_distribution.pdf",
             "Figure2",
             PAPER_FIGURES_DIR,
         )
     )
-    exported_paths.extend(
-        copy_figure_pair(
+    exported_paths.append(
+        copy_pdf_figure(
             t10_plots_dir / "lid_distribution.png",
             "Figure3",
             PAPER_FIGURES_DIR,
         )
     )
-    exported_paths.extend(
-        copy_figure_pair(
+    exported_paths.append(
+        copy_pdf_figure(
             SUMMARY_DIR / "lid_combined_ccdf.png",
             "Figure4",
             PAPER_FIGURES_DIR,
         )
     )
 
-    figure5_paths = copy_figure_pair(
+    figure5_path = copy_pdf_figure(
         SUMMARY_DIR / "eer_vs_infodisc_scatter.png",
         "Figure5",
         PAPER_FIGURES_DIR,
         required=False,
     )
-    if figure5_paths:
-        exported_paths.extend(figure5_paths)
+    if figure5_path:
+        exported_paths.append(figure5_path)
     else:
         skipped.append("Figure5")
 

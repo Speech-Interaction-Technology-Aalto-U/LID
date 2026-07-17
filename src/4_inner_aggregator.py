@@ -16,8 +16,13 @@ Outputs:
 import numpy as np
 import pandas as pd
 
-from experiment_paths import lid_path, scores_path
-from tools.utils import iter_experiment_dirs, SEPARATOR, SEPARATOR2
+from tools.utils import (
+    iter_experiment_dirs,
+    lid_path,
+    scores_path,
+    SEPARATOR,
+    SEPARATOR2,
+)
 
 
 def count_text(values, label):

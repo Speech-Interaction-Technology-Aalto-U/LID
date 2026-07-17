@@ -16,8 +16,14 @@ Outputs:
 import json
 import pandas as pd
 
-from experiment_paths import lid_path, scores_path
-from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
+from tools.utils import (
+    PROJECT_ROOT,
+    iter_experiment_dirs,
+    lid_path,
+    scores_path,
+    SEPARATOR,
+    SEPARATOR2,
+)
 
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
 METRICS_FILE = "results.json"

@@ -18,8 +18,14 @@ Outputs:
 import numpy as np
 import pandas as pd
 
-from experiment_paths import enrolment_embeddings_path, original_embeddings_path
-from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
+from tools.utils import (
+    PROJECT_ROOT,
+    enrolment_embeddings_path,
+    iter_experiment_dirs,
+    original_embeddings_path,
+    SEPARATOR,
+    SEPARATOR2,
+)
 
 
 SHARED_DIR = PROJECT_ROOT / "data" / "shared"

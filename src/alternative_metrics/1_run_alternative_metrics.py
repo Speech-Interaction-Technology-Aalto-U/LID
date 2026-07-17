@@ -18,10 +18,15 @@ from pathlib import Path
 import sys
 import pandas as pd
 
-from tools.utils import PROJECT_ROOT, iter_experiment_dirs, SEPARATOR, SEPARATOR2
+from tools.utils import (
+    PROJECT_ROOT,
+    iter_experiment_dirs,
+    scores_path,
+    SEPARATOR,
+    SEPARATOR2,
+)
 from cllr import compute_cllr, plot_pav_calibration
 from eer import plot_eer_histogram
-from experiment_paths import scores_path
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:

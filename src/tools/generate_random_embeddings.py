@@ -1,3 +1,14 @@
+"""
+Create a random-embedding baseline from an existing experiment schema.
+
+The generated random embeddings use the utterance metadata and embedding
+dimension from a reference experiment, but only for utterances listed in the
+shared dev/test enrolment and trial files.
+
+Example:
+    uv run src/tools/generate_random_embeddings.py B3
+"""
+
 import argparse
 from pathlib import Path
 import sys
@@ -5,30 +16,29 @@ import sys
 import numpy as np
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_DIR = PROJECT_ROOT / "src"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from experiment_paths import original_embeddings_path
+from tools.utils import (
+    EXPERIMENTS_DIR,
+    PROJECT_ROOT,
+    original_embeddings_path,
+    relative_path,
+    SEPARATOR,
+    SEPARATOR2,
+)
 
 SHARED_DIR = PROJECT_ROOT / "data" / "shared"
-DEFAULT_REFERENCE_PARQUET = original_embeddings_path(
-    PROJECT_ROOT / "data" / "experiments" / "B3_ECAPA"
-)
-DEFAULT_OUTPUT_PARQUET = original_embeddings_path(
-    PROJECT_ROOT / "data" / "experiments" / "random"
-)
+DEFAULT_REFERENCE_EXPERIMENT = "B3"
+DEFAULT_OUTPUT_EXPERIMENT = "random"
 SHARED_ID_FILES = (
     ("dev enrolments", SHARED_DIR / "dev_enrolls.csv", "utterance_id"),
     ("dev trials", SHARED_DIR / "dev_trials.csv", "trial_id"),
     ("test enrolments", SHARED_DIR / "test_enrolls.csv", "utterance_id"),
     ("test trials", SHARED_DIR / "test_trials.csv", "trial_id"),
 )
-
-
-def relative_path(path):
-    return path.relative_to(PROJECT_ROOT)
 
 
 def load_shared_utterance_ids(shared_dir):
@@ -53,16 +63,22 @@ def load_shared_utterance_ids(shared_dir):
 
 
 def generate_random_embeddings(
-    reference_parquet_path=DEFAULT_REFERENCE_PARQUET,
-    output_parquet_path=DEFAULT_OUTPUT_PARQUET,
+    reference_experiment=DEFAULT_REFERENCE_EXPERIMENT,
+    output_experiment=DEFAULT_OUTPUT_EXPERIMENT,
     shared_dir=SHARED_DIR,
     seed=None,
 ):
-    reference_parquet_path = Path(reference_parquet_path)
-    output_parquet_path = Path(output_parquet_path)
+    reference_experiment_dir = EXPERIMENTS_DIR / reference_experiment
+    output_experiment_dir = EXPERIMENTS_DIR / output_experiment
+    reference_parquet_path = original_embeddings_path(reference_experiment_dir)
+    output_parquet_path = original_embeddings_path(output_experiment_dir)
     shared_dir = Path(shared_dir)
 
-    print(f"Loading reference from {relative_path(reference_parquet_path)}")
+    if not reference_parquet_path.is_file():
+        raise FileNotFoundError(
+            f"Missing reference embeddings file: {reference_parquet_path}"
+        )
+
     df_reference = pd.read_parquet(reference_parquet_path)
 
     required_columns = {"utterance_id", "speaker_id", "embedding", "source_file"}
@@ -96,36 +112,62 @@ def generate_random_embeddings(
     embedding_dim = len(reference_embedding)
     rng = np.random.default_rng(seed)
 
-    print(f"Generating {len(df)} random {embedding_dim}-dimensional embeddings...")
     df["embedding"] = list(
         rng.uniform(-100, 100, size=(len(df), embedding_dim)).astype(np.float32)
     )
     df = df[df_reference.columns]
 
     output_parquet_path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Saving to {relative_path(output_parquet_path)}")
     df.to_parquet(output_parquet_path, index=False)
-    print("Done!")
+
+    return {
+        "reference_experiment": reference_experiment,
+        "output_experiment": output_experiment,
+        "embeddings": len(df),
+        "embedding_dim": embedding_dim,
+        "output_path": output_parquet_path,
+        "seed": seed,
+    }
+
+
+def print_summary(summary):
+    print(
+        f"Created {summary['embeddings']} random "
+        f"{summary['embedding_dim']}-dimensional embeddings."
+    )
+    print(
+        f"Reference experiment: {summary['reference_experiment']} -> "
+        f"output experiment: {summary['output_experiment']}"
+    )
+    if summary["seed"] is not None:
+        print(f"Seed: {summary['seed']}")
+    print()
+    print(f"Saved to {relative_path(summary['output_path'])}.")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Generate random embeddings matching the B3_ECAPA parquet schema for "
-            "utterances listed in data/shared."
+            "Generate random embeddings matching a reference experiment's schema "
+            "and embedding dimension."
         )
     )
     parser.add_argument(
-        "--reference",
-        type=Path,
-        default=DEFAULT_REFERENCE_PARQUET,
-        help="Reference embeddings parquet used for schema and utterance metadata.",
+        "reference_experiment",
+        nargs="?",
+        default=DEFAULT_REFERENCE_EXPERIMENT,
+        help=(
+            "Experiment under data/experiments used as the schema/dimension "
+            f"reference. Default: {DEFAULT_REFERENCE_EXPERIMENT}."
+        ),
     )
     parser.add_argument(
-        "--output",
-        type=Path,
-        default=DEFAULT_OUTPUT_PARQUET,
-        help="Output parquet path.",
+        "--output-experiment",
+        default=DEFAULT_OUTPUT_EXPERIMENT,
+        help=(
+            "Experiment folder where random embeddings are written. "
+            f"Default: {DEFAULT_OUTPUT_EXPERIMENT}."
+        ),
     )
     parser.add_argument(
         "--shared-dir",
@@ -144,4 +186,22 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    generate_random_embeddings(args.reference, args.output, args.shared_dir, args.seed)
+    print()
+    print(SEPARATOR)
+    print("Generating random baseline embeddings.")
+    print(SEPARATOR)
+    print(
+        "Using shared dev/test utterance IDs and matching the reference "
+        "experiment's embedding dimension."
+    )
+    print()
+
+    summary = generate_random_embeddings(
+        reference_experiment=args.reference_experiment,
+        output_experiment=args.output_experiment,
+        shared_dir=args.shared_dir,
+        seed=args.seed,
+    )
+    print_summary(summary)
+    print(SEPARATOR2)
+    print()
