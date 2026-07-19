@@ -243,7 +243,7 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
     # )
     ax.set_title("Combined Local Information Disclosure CCDF")
     ax.set_xlabel("Local Information Disclosure (bits)")
-    ax.set_ylabel("CCDF (%)")
+    ax.set_ylabel("Trials Exceeding Disclosure Level (%)")
     ax.set_ylim([0.0, 100.0])
     ax.legend(
         loc="lower left",
@@ -563,14 +563,14 @@ def print_dataframe_table(df):
         )
 
 
-def copy_pdf_figure(source_path, figure_name, out_dir, required=True):
-    source = source_path.with_suffix(".pdf")
+def copy_png_figure(source_path, figure_name, out_dir, required=True):
+    source = source_path.with_suffix(".png")
     if not source.is_file():
         if required:
             raise FileNotFoundError(f"Missing required figure source: {source}")
         return None
 
-    destination = out_dir / f"{figure_name}.pdf"
+    destination = out_dir / f"{figure_name}.png"
     shutil.copy2(source, destination)
     return destination
 
@@ -598,28 +598,28 @@ def export_paper_figures():
     skipped = []
 
     exported_paths.append(
-        copy_pdf_figure(
+        copy_png_figure(
             t10_plots_dir / "probability_distribution.pdf",
             "Figure2",
             PAPER_FIGURES_DIR,
         )
     )
     exported_paths.append(
-        copy_pdf_figure(
+        copy_png_figure(
             t10_plots_dir / "lid_distribution.png",
             "Figure3",
             PAPER_FIGURES_DIR,
         )
     )
     exported_paths.append(
-        copy_pdf_figure(
+        copy_png_figure(
             SUMMARY_DIR / "lid_combined_ccdf.png",
             "Figure4",
             PAPER_FIGURES_DIR,
         )
     )
 
-    figure5_path = copy_pdf_figure(
+    figure5_path = copy_png_figure(
         SUMMARY_DIR / "eer_vs_infodisc_scatter.png",
         "Figure5",
         PAPER_FIGURES_DIR,

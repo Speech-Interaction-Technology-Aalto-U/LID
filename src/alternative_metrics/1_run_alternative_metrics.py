@@ -18,6 +18,14 @@ from pathlib import Path
 import sys
 import pandas as pd
 
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+ALTERNATIVE_METRICS_DIR = Path(__file__).resolve().parent
+if str(ALTERNATIVE_METRICS_DIR) not in sys.path:
+    sys.path.insert(0, str(ALTERNATIVE_METRICS_DIR))
+
 from tools.utils import (
     PROJECT_ROOT,
     iter_experiment_dirs,
@@ -27,16 +35,6 @@ from tools.utils import (
 )
 from cllr import compute_cllr, plot_pav_calibration
 from eer import plot_eer_histogram
-
-SRC_DIR = Path(__file__).resolve().parents[1]
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-    
-ALTERNATIVE_METRICS_DIR = PROJECT_ROOT / "src" / "alternative_metrics"
-if str(ALTERNATIVE_METRICS_DIR) not in sys.path:
-    sys.path.insert(0, str(ALTERNATIVE_METRICS_DIR))
-
-
 
 RESULTS_DIR = PROJECT_ROOT / "results" / "experiments"
 OUTPUT_DIR_NAME = "alternative_metrics"
