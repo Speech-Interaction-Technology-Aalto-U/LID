@@ -167,7 +167,7 @@ If you use this framework or code in your work, please cite:
 
 ## Support & Feedback
 
-Encountered a bug, have a question, or a suggestion? You can open an issue on GitHub or reach out to the authors directly.
+Encountered a bug, have a question, or a suggestion? You can open an issue on GitHub or reach out to the authors directly. We are also very open to community contributions, so please get in touch if you would like to collaborate on extending this tool.
 
 ## Disclaimer
 
