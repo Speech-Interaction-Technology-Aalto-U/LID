@@ -124,7 +124,7 @@ uv run src/run_all_results.py
 
 The `run_all_results.py` script executes the following sequential steps:
 
-1. **`1_average_enrolment_embeddings.py`**: Aggregates enrolment utterances ($\mathcal{E}$) into stable target identity profiles for both $\mathcal{D}_\text{dev}$ and ${\mathcal{D}}_{\text{eval}}$.
+1. **`1_average_enrolment_embeddings.py`**: Aggregates enrolment utterances ($\mathcal{E}$) into stable target identity profiles for both $\mathcal{D}_\text{dev}$ and ${\mathcal{D}}\_{\text{eval}}$.
 2. **`2_create_scores_from_embeddings.py`**: Computes raw similarity score matrices between trial utterances ($\mathcal{T}$) and enrolment profiles.
 3. **`alternative_metrics/1_run_alternative_metrics.py`**: Computes standard baseline metrics (EER, Cllr).
 4. **`3_calibrate_scores.py`**: Applies row-wise $z$-normalization, learns logistic calibration weights on $\mathcal{D}_\text{dev}$, and applies them to $\mathcal{D}_\text{eval}$.
