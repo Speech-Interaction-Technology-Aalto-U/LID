@@ -127,9 +127,9 @@ The `run_all_results.py` script executes the following sequential steps:
 1. **`1_average_enrolment_embeddings.py`**: Aggregates enrolment utterances ($\mathcal{E}$) into stable target identity profiles for both $\mathcal{D}\_\mathrm{dev}$ and ${\mathcal{D}}\_{\mathrm{eval}}$.
 2. **`2_create_scores_from_embeddings.py`**: Computes raw similarity score matrices between trial utterances ($\mathcal{T}$) and enrolment profiles.
 3. **`alternative_metrics/1_run_alternative_metrics.py`**: Computes standard baseline metrics (EER, Cllr).
-4. **`3_calibrate_scores.py`**: Applies row-wise $z$-normalization, learns logistic calibration weights on $\mathcal{D}_\mathrm{dev}$, and applies them to $\mathcal{D}_\mathrm{eval}$.
-5. **`4_inner_aggregator.py`**: Computes the exact Local Information Disclosure ($\mathrm{LID}_i$) in bits for every individual trial $i$.
-6. **`5_outer_aggregator.py`**: Distills trial-level $\mathrm{LID}_i$ values into global risk metrics (ALID, PDR, $\mathrm{LID}^+$, $\mathrm{LID}_{\max}$).
+4. **`3_calibrate_scores.py`**: Applies row-wise $z$-normalization, learns logistic calibration weights on ${\mathcal{D}}\_{\mathrm{dev}}$, and applies them to ${\mathcal{D}}\_{\mathrm{eval}}$.
+5. **`4_inner_aggregator.py`**: Computes the exact Local Information Disclosure (${\mathrm{LID}\_i}$) in bits for every individual trial $i$.
+6. **`5_outer_aggregator.py`**: Distills trial-level ${\mathrm{LID}\_i}$ values into global risk metrics (ALID, PDR, ${\mathrm{LID}^+}$, ${\mathrm{LID}_{\max}}$).
 7. **`6_create_plots_and_summaries.py`**: Generates publication-ready artifacts and graphs.
 
 ## Outputs
