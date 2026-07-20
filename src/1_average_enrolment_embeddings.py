@@ -15,6 +15,8 @@ Outputs:
     <experiment>/embeddings/enrolment/test_enroll_embeddings.parquet
 """
 
+import argparse
+
 import numpy as np
 import pandas as pd
 
@@ -121,7 +123,18 @@ def print_summary(processed_experiments, split_summaries):
     print("Aceraged embeddings are saved in each experiment's embeddings/enrolment/ directory.")
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(
+        description="Create enrolment embeddings for one or more experiments."
+    )
+    parser.add_argument(
+        "--experiments",
+        nargs="+",
+        metavar="EXPERIMENT",
+        help="Only process these experiment directory names.",
+    )
+    args = parser.parse_args()
+
     print()
     print(SEPARATOR)
 
@@ -133,10 +146,14 @@ if __name__ == "__main__":
 
     processed_experiments = []
     split_summaries = []
-    for experiment_dir in iter_experiment_dirs():
+    for experiment_dir in iter_experiment_dirs(args.experiments):
         split_summaries.append(process_experiment(experiment_dir))
         processed_experiments.append(experiment_dir.name)
 
     print_summary(processed_experiments, split_summaries)
     print(SEPARATOR2)
     print()
+
+
+if __name__ == "__main__":
+    main()

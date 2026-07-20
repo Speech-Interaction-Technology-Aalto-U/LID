@@ -20,13 +20,26 @@ def relative_path(path):
     return path.relative_to(PROJECT_ROOT)
 
 
-def iter_experiment_dirs():
+def iter_experiment_dirs(experiment_names=None):
     if not EXPERIMENTS_DIR.is_dir():
         raise FileNotFoundError(f"Missing experiments directory: {EXPERIMENTS_DIR}")
 
     experiment_dirs = sorted(path for path in EXPERIMENTS_DIR.iterdir() if path.is_dir())
     if not experiment_dirs:
         raise FileNotFoundError(f"No experiment directories found in: {EXPERIMENTS_DIR}")
+
+    if experiment_names is not None:
+        requested_names = set(experiment_names)
+        available_names = {path.name for path in experiment_dirs}
+        missing_names = sorted(requested_names - available_names)
+        if missing_names:
+            raise FileNotFoundError(
+                f"Unknown experiment directories: {', '.join(missing_names)}"
+            )
+        experiment_dirs = [
+            path for path in experiment_dirs if path.name in requested_names
+        ]
+
     return experiment_dirs
 
 

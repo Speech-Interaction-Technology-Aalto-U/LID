@@ -15,6 +15,8 @@ Outputs:
     <experiment>/scores/test_scores.csv
 """
 
+import argparse
+
 import numpy as np
 import pandas as pd
 
@@ -138,7 +140,18 @@ def print_summary(split_summaries):
     print("The scores are saved in each experiment's scores/ directory.")
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(
+        description="Create similarity scores for one or more experiments."
+    )
+    parser.add_argument(
+        "--experiments",
+        nargs="+",
+        metavar="EXPERIMENT",
+        help="Only process these experiment directory names.",
+    )
+    args = parser.parse_args()
+
     print()
     print(SEPARATOR)
     print("STEP 2. Creating similarity scores.")
@@ -149,9 +162,13 @@ if __name__ == "__main__":
     print()
 
     split_summaries = []
-    for experiment_dir in iter_experiment_dirs():
+    for experiment_dir in iter_experiment_dirs(args.experiments):
         split_summaries.append(process_experiment(experiment_dir))
 
     print_summary(split_summaries)
     print(SEPARATOR2)
     print()
+
+
+if __name__ == "__main__":
+    main()
