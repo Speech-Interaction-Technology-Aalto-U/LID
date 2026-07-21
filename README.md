@@ -30,7 +30,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install dependencies and execute the full evaluation pipeline
 uv sync
-uv run src/run_all_results.py
+uv run src/pipeline/run_all_results.py
 ```
 
 ## Data & Components
@@ -117,7 +117,7 @@ To properly contextualize your privacy metrics, it is best practice to compare y
 **4. Run the evaluation**
 Execute the pipeline to generate all metrics and plots for your new experiment:
 ```bash
-uv run src/run_all_results.py
+uv run src/pipeline/run_all_results.py
 ```
 
 ## Pipeline Architecture
