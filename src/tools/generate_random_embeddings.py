@@ -35,9 +35,9 @@ DEFAULT_REFERENCE_EXPERIMENT = "B3"
 DEFAULT_OUTPUT_EXPERIMENT = "random"
 SHARED_ID_FILES = (
     ("dev enrolments", SHARED_DIR / "dev_enrolls.csv", "utterance_id"),
-    ("dev trials", SHARED_DIR / "dev_trials.csv", "trial_id"),
+    ("dev trials", SHARED_DIR / "dev_trials.csv", "utterance_id"),
     ("test enrolments", SHARED_DIR / "test_enrolls.csv", "utterance_id"),
-    ("test trials", SHARED_DIR / "test_trials.csv", "trial_id"),
+    ("test trials", SHARED_DIR / "test_trials.csv", "utterance_id"),
 )
 
 

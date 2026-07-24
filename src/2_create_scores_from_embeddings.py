@@ -35,6 +35,7 @@ SPLITS = {
     "dev": SHARED_DIR / "dev_trials.csv",
     "test": SHARED_DIR / "test_trials.csv",
 }
+REQUIRED_TRIAL_COLUMNS = {"utterance_id", "speaker_id"}
 
 
 def l2_normalize(matrix):
@@ -46,14 +47,20 @@ def compute_scores(embeddings_path, enroll_embeddings_path, trials_csv_path, out
     df_enroll = pd.read_parquet(enroll_embeddings_path)
     df_trials = pd.read_csv(trials_csv_path)
 
+    missing_trial_columns = REQUIRED_TRIAL_COLUMNS - set(df_trials.columns)
+    if missing_trial_columns:
+        raise ValueError(
+            f"Trials CSV is missing required columns: {sorted(missing_trial_columns)}"
+        )
+
     emb_lookup = dict(zip(df_emb["utterance_id"], df_emb["embedding"]))
-    valid_trials = df_trials[df_trials["trial_id"].isin(emb_lookup)].copy()
+    valid_trials = df_trials[df_trials["utterance_id"].isin(emb_lookup)].copy()
 
     enroll_spks = df_enroll["speaker_id"].values
     enroll_embs = l2_normalize(np.stack(df_enroll["embedding"].values))
 
-    trial_ids = valid_trials["trial_id"].values
-    trial_spks = valid_trials["trial_spk"].values
+    trial_ids = valid_trials["utterance_id"].values
+    trial_spks = valid_trials["speaker_id"].values
     trial_embs = l2_normalize(np.stack([emb_lookup[trial_id] for trial_id in trial_ids]))
 
     scores = np.dot(enroll_embs, trial_embs.T)
