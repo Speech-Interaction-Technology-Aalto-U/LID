@@ -120,6 +120,63 @@ Execute the pipeline to generate all metrics and plots for your new experiment:
 uv run src/pipeline/run_all_results.py
 ```
 
+## Longitudinal Leakage
+
+After the main pipeline has calibrated `test_scores.csv`, aggregate all trial LLR
+vectors belonging to the same speaker with:
+
+```bash
+# Process every experiment.
+uv run src/long_leakage/run_longitudinal_analysis.py
+
+# Or process selected experiments.
+uv run src/long_leakage/run_longitudinal_analysis.py \
+  --experiments B3 T10-2
+```
+
+For each experiment, outputs are written to `data/experiments/<experiment>/long/`:
+
+* `scores.csv`: summed and averaged LLRs for every trial-speaker/enrolment pair.
+* `probabilities.csv`: row-normalized probabilities obtained separately from the
+  summed and averaged LLRs.
+* `mated_probabilities.csv`: mated probabilities and LID values before
+  aggregation, after summing, and after averaging.
+* `llr_heatmaps.*` and `probability_heatmaps.*`: individual, summed, and averaged
+  evidence shown side by side. An aggregate speaker row has the same plotted
+  height as all of that speaker's individual trials. A white dot marks each
+  mated aggregate cell where the trial and enrolment speaker identities match.
+* `mated_probability_comparison.*` and `mated_lid_comparison.*`: overlaid
+  before/after-summing histograms.
+* `sum_llr/` and `average_llr/`: method-specific aggregated `scores.csv`,
+  mated before/after data, metadata, and probability/LID comparison histograms.
+  The histogram bars are semi-transparent; original disclosures are gray and
+  aggregated disclosures are coral.
+
+Cross-experiment averaged-LLR results are written to `results/long/`:
+
+* `<experiment>/results.json`: ALID, PDR, NDR, LID+, LID-, and LID max for
+  mated probabilities obtained from the averaged LLR vectors. It also contains
+  `before_aggregation`, `after_aggregation`, and `change_after_minus_before`
+  sections for direct comparison with the individual trial results.
+* `<experiment>/lid_metrics_before_after.*`: grouped before/after bars for all
+  six metrics, annotated with values rounded to two decimal places. PDR and NDR
+  use the left percentage axis; ALID, LID+, LID-, and LID max use the right
+  information-disclosure axis in bits.
+* `summary_table.csv`: the same longitudinal metrics for every experiment.
+* `lid_combined_ccdf.*`: the combined CCDF for averaged-LLR LID values.
+* `lid_original_vs_averaged_ccdf.*`: original trial LID (solid) and averaged-LLR
+  LID (dotted), using the same color for both lines of each experiment.
+* `lid_metrics_experiment_comparison.*`: a six-panel comparison across all
+  experiments in a 3-by-2 grid. PDR and NDR have separate percentage panels;
+  ALID, LID+, LID-, and LID max each have a dedicated before/after panel with an
+  independent bit scale.
+
+Run the deterministic longitudinal tests with:
+
+```bash
+uv run python -m unittest tests/test_long_leakage.py
+```
+
 ## Pipeline Architecture
 
 The `run_all_results.py` script executes the following sequential steps:
