@@ -781,7 +781,6 @@ def _plot_ccdf_curve(ax, values, color, linestyle, label=None):
     )
     ax.plot(
         plot_values,
->>>>>>> Stashed changes
         percentages,
         color=color,
         linestyle=linestyle,
