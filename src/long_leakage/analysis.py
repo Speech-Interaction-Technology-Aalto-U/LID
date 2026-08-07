@@ -774,9 +774,14 @@ def _plot_ccdf_curve(ax, values, color, linestyle, label=None):
     if len(values) == 0:
         return
     sorted_values = np.sort(values)
-    percentages = np.arange(len(values), 0, -1) / len(values) * 100.0
+
+    plot_values = np.concatenate((sorted_values, sorted_values[-1:]))
+    percentages = (
+        np.arange(len(values), -1, -1, dtype=float) / len(values) * 100.0
+    )
     ax.plot(
-        sorted_values,
+        plot_values,
+>>>>>>> Stashed changes
         percentages,
         color=color,
         linestyle=linestyle,
@@ -839,13 +844,14 @@ def plot_original_vs_averaged_lid_ccdf(
             ax,
             original_lids[experiment_name],
             color=color,
-            linestyle="-",
+            linestyle=":",
         )
         _plot_ccdf_curve(
             ax,
             averaged_lids[experiment_name],
             color=color,
-            linestyle=":",
+          linestyle="-",
+
         )
 
     experiment_handles = [

@@ -4,6 +4,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
+
+from matplotlib.figure import Figure
+
 import numpy as np
 import pandas as pd
 
@@ -15,6 +18,7 @@ if str(SRC_DIR) not in sys.path:
 
 from long_leakage.analysis import (
     _mated_marker_coordinates,
+    _plot_ccdf_curve,
     aggregate_lid_metrics,
     analyse_experiment,
     build_longitudinal_evidence,
@@ -44,6 +48,26 @@ def toy_scores():
 
 
 class LongitudinalEvidenceTests(unittest.TestCase):
+
+    def test_ccdf_reaches_zero(self):
+        ax = Figure().subplots()
+
+        _plot_ccdf_curve(
+            ax,
+            [3.0, np.nan, 1.0, 2.0],
+            color="black",
+            linestyle="-",
+        )
+
+        line = ax.lines[0]
+        np.testing.assert_allclose(line.get_xdata(), [1.0, 2.0, 3.0, 3.0])
+        np.testing.assert_allclose(
+            line.get_ydata(),
+            [100.0, 200.0 / 3.0, 100.0 / 3.0, 0.0],
+        )
+        self.assertEqual(line.get_drawstyle(), "default")
+
+
     def test_aggregates_unequal_trial_counts_and_normalizes_probabilities(self):
         evidence = build_longitudinal_evidence(toy_scores())
 
