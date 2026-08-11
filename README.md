@@ -132,7 +132,7 @@ uv run src/long_leakage/run_longitudinal_analysis.py
 
 # Or process selected experiments.
 uv run src/long_leakage/run_longitudinal_analysis.py \
-  --experiments B3 T10-2
+  --experiments 26B3 26T10-2
 ```
 
 For each experiment, outputs are written to `data/experiments/<experiment>/long/`:
@@ -154,14 +154,18 @@ For each experiment, outputs are written to `data/experiments/<experiment>/long/
   aggregated disclosures are coral.
 * `temperature_scaled/`: summed LLRs divided by a global temperature fitted by
   development multiclass log loss.
-* `count_adjusted/`: a fitted correlation design effect
-  `T(k) = 1 + rho * (k - 1)` that gives diminishing marginal evidence.
-* `similarity_adjusted/`: a fitted temperature based on positive pairwise cosine
-  redundancy between centered LLR vectors.
+* `temperature_scaled_brier/`: the same global model with temperature fitted by
+  development multiclass Brier score.
+* `count_adjusted/`: the fitted two-parameter correlation design effect
+  `T(k) = tau * [1 + rho * (k - 1)]`, which gives diminishing marginal evidence.
+* `similarity_adjusted/`: fitted `tau` and `rho` applied to positive pairwise
+  cosine redundancy between the actual trial embeddings. The development and
+  test pair similarities are precomputed in the experiment's `scores/` folder.
 * `calibration.json` and `calibration_diagnostics.csv`: development-only fitted
   parameters, full-development metrics, and leave-one-speaker-out diagnostics.
 * `interactive_longitudinal.html`: a self-contained LID/probability heatmap with
-  all aggregation methods and a live logarithmic temperature slider.
+  live metrics and histograms, a global temperature control, separate `tau` and
+  `rho` controls for both adjusted methods, and fitted-value reset buttons.
 
 The exact formulas, data-split safeguards, interpretation guidance, and artifact
 schema are documented in [`src/long_leakage/readme.md`](src/long_leakage/readme.md).

@@ -13,7 +13,14 @@ from .calibration import (
     build_calibration_dataset,
     calibrate_on_development,
     fit_method_parameter,
+    fit_method_parameters,
     load_development_scores,
+)
+from .similarity import (
+    compute_trial_embedding_similarities,
+    load_trial_embedding_similarities,
+    precompute_experiment_embedding_similarities,
+    similarity_path,
 )
 
 __all__ = [
@@ -27,5 +34,10 @@ __all__ = [
     "build_calibration_dataset",
     "calibrate_on_development",
     "fit_method_parameter",
+    "fit_method_parameters",
     "load_development_scores",
+    "compute_trial_embedding_similarities",
+    "load_trial_embedding_similarities",
+    "precompute_experiment_embedding_similarities",
+    "similarity_path",
 ]

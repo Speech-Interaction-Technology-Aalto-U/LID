@@ -88,12 +88,23 @@ def main():
         summary["speaker_plot_paths"] = speaker_plot_paths
         summary["calibrated_aggregation"] = calibrated_summary
         summaries.append(summary)
+        count_parameters = calibrated_summary["fitted_count_parameters"]
+        similarity_parameters = calibrated_summary[
+            "fitted_similarity_parameters"
+        ]
         print(
             f"{experiment_dir.name}: {summary['n_trials']} trials from "
             f"{summary['n_trial_speakers']} speakers; wrote "
             f"{relative_path(experiment_dir / 'long')} and regenerated "
-            f"{len(speaker_plot_paths)} by-speaker plot files; fitted "
-            f"T={calibrated_summary['fitted_temperature']:.6g} on development"
+            f"{len(speaker_plot_paths)} by-speaker plot files; development "
+            f"fits: global T(NLL)="
+            f"{calibrated_summary['fitted_temperature']:.6g}, "
+            f"global T(Brier)="
+            f"{calibrated_summary['fitted_brier_temperature']:.6g}, "
+            f"count (T={count_parameters['temperature']:.6g}, "
+            f"rho={count_parameters['rho']:.6g}), embedding "
+            f"(T={similarity_parameters['temperature']:.6g}, "
+            f"rho={similarity_parameters['rho']:.6g})"
         )
 
     results_dir = PROJECT_ROOT / "results" / "long"
