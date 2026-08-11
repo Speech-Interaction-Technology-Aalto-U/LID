@@ -1,3 +1,4 @@
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -24,7 +25,9 @@ from long_leakage.analysis import (
     build_longitudinal_evidence,
     create_longitudinal_summary,
     load_trial_scores,
+    speaker_metric_comparison,
 )
+from long_leakage.run_longitudinal_analysis import regenerate_speaker_plots
 
 
 def toy_scores():
@@ -103,6 +106,66 @@ class LongitudinalEvidenceTests(unittest.TestCase):
         )
         expected_lid = np.log2(evidence.n_enrolments * mated["p"].to_numpy())
         np.testing.assert_allclose(mated["LID"], expected_lid)
+
+    def test_compares_trial_means_with_averaged_evidence_by_speaker(self):
+        evidence = build_longitudinal_evidence(toy_scores())
+        mated = evidence.mated_dataframe()
+
+        comparison = speaker_metric_comparison(mated).set_index("trial_spk")
+        before = mated[mated["stage"] == "before"].groupby("trial_spk")
+        averaged = mated[mated["stage"] == "averaged"].set_index("trial_spk")
+        summed = mated[mated["stage"] == "summed"].set_index("trial_spk")
+
+        np.testing.assert_allclose(
+            comparison["trial_mean_p"],
+            before["p"].mean().reindex(comparison.index),
+        )
+        np.testing.assert_allclose(
+            comparison["trial_mean_LID"],
+            before["LID"].mean().reindex(comparison.index),
+        )
+        np.testing.assert_allclose(
+            comparison["aggregated_p"],
+            averaged["p"].reindex(comparison.index),
+        )
+        np.testing.assert_allclose(
+            comparison["aggregated_LID"],
+            averaged["LID"].reindex(comparison.index),
+        )
+        np.testing.assert_allclose(
+            comparison["summed_p"],
+            summed["p"].reindex(comparison.index),
+        )
+        np.testing.assert_allclose(
+            comparison["summed_LID"],
+            summed["LID"].reindex(comparison.index),
+        )
+
+    def test_clamps_and_labels_summed_evidence_outside_plot_range(self):
+        plot_module = importlib.import_module(
+            "pipeline.6_create_plots_and_summaries"
+        )
+        ax = Figure().subplots()
+
+        plot_module.plot_summed_evidence(
+            ax,
+            values=np.array([-123.45, 0.5, 0.99, 1.0, 12.5]),
+            y_values=np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
+            x_min=0.0,
+            x_max=0.8,
+            zorder=3,
+            boundary_values=(1.0,),
+            boundary_epsilon=0.01,
+        )
+
+        plotted_x = np.concatenate(
+            [collection.get_offsets()[:, 0] for collection in ax.collections]
+        )
+        self.assertTrue(((plotted_x >= 0.0) & (plotted_x <= 0.8)).all())
+        self.assertEqual(
+            {text.get_text() for text in ax.texts},
+            {"-123.45", "12.5"},
+        )
 
     def test_centers_mated_markers_in_variable_height_speaker_rows(self):
         evidence = build_longitudinal_evidence(toy_scores())
@@ -225,6 +288,29 @@ class LongitudinalEvidenceTests(unittest.TestCase):
                     method_dir / "mated_probabilities.csv"
                 )
                 self.assertEqual(set(method_mated["stage"]), {"before", "after"})
+
+            speaker_plots_dir = Path(temporary_dir) / "speaker_plots"
+            speaker_plot_paths = regenerate_speaker_plots(
+                experiment_dir,
+                summary["mated_path"],
+                dpi=40,
+                out_dir=speaker_plots_dir,
+            )
+            self.assertEqual(
+                {path.name for path in speaker_plot_paths},
+                {
+                    "probability_distribution_by_speaker.png",
+                    "probability_distribution_by_speaker.pdf",
+                    "probability_distribution_by_speaker_heatmap.png",
+                    "probability_distribution_by_speaker_heatmap.pdf",
+                    "lid_distribution_by_speaker.png",
+                    "lid_distribution_by_speaker.pdf",
+                    "lid_distribution_by_speaker_heatmap.png",
+                    "lid_distribution_by_speaker_heatmap.pdf",
+                },
+            )
+            for plot_path in speaker_plot_paths:
+                self.assertGreater(plot_path.stat().st_size, 0)
 
             results_dir = Path(temporary_dir) / "results" / "long"
             combined = create_longitudinal_summary(

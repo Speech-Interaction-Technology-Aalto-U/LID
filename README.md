@@ -122,8 +122,9 @@ uv run src/pipeline/run_all_results.py
 
 ## Longitudinal Leakage
 
-After the main pipeline has calibrated `test_scores.csv`, aggregate all trial LLR
-vectors belonging to the same speaker with:
+After the main pipeline has calibrated the score files, aggregate all trial LLR
+vectors belonging to the same speaker and fit longitudinal calibration parameters
+on development speakers with:
 
 ```bash
 # Process every experiment.
@@ -151,6 +152,19 @@ For each experiment, outputs are written to `data/experiments/<experiment>/long/
   mated before/after data, metadata, and probability/LID comparison histograms.
   The histogram bars are semi-transparent; original disclosures are gray and
   aggregated disclosures are coral.
+* `temperature_scaled/`: summed LLRs divided by a global temperature fitted by
+  development multiclass log loss.
+* `count_adjusted/`: a fitted correlation design effect
+  `T(k) = 1 + rho * (k - 1)` that gives diminishing marginal evidence.
+* `similarity_adjusted/`: a fitted temperature based on positive pairwise cosine
+  redundancy between centered LLR vectors.
+* `calibration.json` and `calibration_diagnostics.csv`: development-only fitted
+  parameters, full-development metrics, and leave-one-speaker-out diagnostics.
+* `interactive_longitudinal.html`: a self-contained LID/probability heatmap with
+  all aggregation methods and a live logarithmic temperature slider.
+
+The exact formulas, data-split safeguards, interpretation guidance, and artifact
+schema are documented in [`src/long_leakage/readme.md`](src/long_leakage/readme.md).
 
 Cross-experiment averaged-LLR results are written to `results/long/`:
 
@@ -174,7 +188,9 @@ Cross-experiment averaged-LLR results are written to `results/long/`:
 Run the deterministic longitudinal tests with:
 
 ```bash
-uv run python -m unittest tests/test_long_leakage.py
+uv run python -m unittest \
+  tests/test_long_leakage.py \
+  tests/test_longitudinal_calibration.py
 ```
 
 ## Pipeline Architecture

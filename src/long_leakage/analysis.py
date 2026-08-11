@@ -49,27 +49,33 @@ def load_trial_scores(scores_csv_path):
         scores_csv_path,
         dtype={column: "string" for column in IDENTITY_COLUMNS},
     )
+    return validate_trial_scores(df_scores, source=scores_csv_path)
+
+
+def validate_trial_scores(df_scores, source="score data"):
+    """Validate an in-memory complete trial-by-enrolment LLR matrix."""
+    df_scores = df_scores.copy()
     missing_columns = REQUIRED_SCORE_COLUMNS - set(df_scores.columns)
     if missing_columns:
         raise ValueError(
-            f"{scores_csv_path} is missing required columns: "
+            f"{source} is missing required columns: "
             f"{sorted(missing_columns)}"
         )
     if df_scores.empty:
-        raise ValueError(f"{scores_csv_path} contains no scores")
+        raise ValueError(f"{source} contains no scores")
 
     null_identities = [
         column for column in IDENTITY_COLUMNS if df_scores[column].isna().any()
     ]
     if null_identities:
         raise ValueError(
-            f"{scores_csv_path} contains missing identity values in: "
+            f"{source} contains missing identity values in: "
             f"{null_identities}"
         )
 
     df_scores["llr"] = pd.to_numeric(df_scores["llr"], errors="coerce")
     if not np.isfinite(df_scores["llr"].to_numpy()).all():
-        raise ValueError(f"{scores_csv_path} contains non-finite LLR values")
+        raise ValueError(f"{source} contains non-finite LLR values")
 
     duplicate_rows = df_scores.duplicated(["trial_id", "enroll_spk"], keep=False)
     if duplicate_rows.any():
@@ -596,6 +602,86 @@ def plot_mated_comparisons(
     lid_paths = _save_figure(fig, output_dir, "mated_lid_comparison", dpi)
 
     return probability_paths + lid_paths
+
+
+def speaker_metric_comparison(mated):
+    """Compare direct trial means with averaged and summed LLR evidence."""
+    required_columns = {"stage", "trial_spk", "p", "LID"}
+    missing_columns = required_columns - set(mated.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Mated data is missing required columns: {sorted(missing_columns)}"
+        )
+
+    before = mated[mated["stage"] == "before"]
+    averaged = mated[mated["stage"] == "averaged"]
+    summed = mated[mated["stage"] == "summed"]
+    if before.empty or averaged.empty or summed.empty:
+        raise ValueError(
+            "Mated data must contain before, averaged, and summed stages"
+        )
+
+    for stage, stage_rows in (("averaged", averaged), ("summed", summed)):
+        duplicates = stage_rows["trial_spk"].duplicated(keep=False)
+        if duplicates.any():
+            speakers = stage_rows.loc[duplicates, "trial_spk"].head(10).tolist()
+            raise ValueError(
+                f"Expected one {stage} observation per trial speaker. "
+                f"Duplicate speakers: {speakers}"
+            )
+
+    trial_means = (
+        before.groupby("trial_spk", sort=False, as_index=False)[["p", "LID"]]
+        .mean()
+        .rename(columns={"p": "trial_mean_p", "LID": "trial_mean_LID"})
+    )
+    aggregated = averaged[["trial_spk", "p", "LID"]].rename(
+        columns={"p": "aggregated_p", "LID": "aggregated_LID"}
+    )
+    summed = summed[["trial_spk", "p", "LID"]].rename(
+        columns={"p": "summed_p", "LID": "summed_LID"}
+    )
+    comparison = trial_means.merge(
+        aggregated,
+        on="trial_spk",
+        how="outer",
+        validate="one_to_one",
+        indicator=True,
+    )
+    unmatched = comparison[comparison["_merge"] != "both"]
+    if not unmatched.empty:
+        speakers = unmatched["trial_spk"].head(10).tolist()
+        raise ValueError(
+            "Before and averaged stages contain different trial speakers: "
+            f"{speakers}"
+        )
+
+    comparison = comparison.drop(columns="_merge").merge(
+        summed,
+        on="trial_spk",
+        how="outer",
+        validate="one_to_one",
+        indicator=True,
+    )
+    unmatched = comparison[comparison["_merge"] != "both"]
+    if not unmatched.empty:
+        speakers = unmatched["trial_spk"].head(10).tolist()
+        raise ValueError(
+            "Before and summed stages contain different trial speakers: "
+            f"{speakers}"
+        )
+
+    return comparison.drop(columns="_merge")[
+        [
+            "trial_spk",
+            "trial_mean_p",
+            "aggregated_p",
+            "trial_mean_LID",
+            "aggregated_LID",
+            "summed_p",
+            "summed_LID",
+        ]
+    ]
 
 
 def aggregate_lid_metrics(

@@ -66,6 +66,152 @@ def configure_matplotlib():
     )
 
 
+def speaker_colors(n_speakers):
+    if n_speakers == 0:
+        return []
+
+    colors = ["black"]
+    if n_speakers > 1:
+        color_positions = np.linspace(
+            0.0,
+            2.0,
+            n_speakers - 1,
+            endpoint=False,
+        ) % 1.0
+        colors.extend(plt.colormaps["gist_rainbow"](color_positions))
+    return colors
+
+
+def speaker_indicator_values(speaker_ids, speaker_metrics, column):
+    if speaker_metrics is None:
+        return None, None, None
+
+    mean_column = f"trial_mean_{column}"
+    aggregated_column = f"aggregated_{column}"
+    summed_column = f"summed_{column}"
+    required_columns = {
+        "trial_spk",
+        mean_column,
+        aggregated_column,
+        summed_column,
+    }
+    missing_columns = required_columns - set(speaker_metrics.columns)
+    if missing_columns:
+        raise ValueError(
+            f"Speaker metrics is missing required columns: {sorted(missing_columns)}"
+        )
+
+    metrics = speaker_metrics[list(required_columns)].copy()
+    metrics["trial_spk"] = metrics["trial_spk"].astype(str)
+    if metrics["trial_spk"].duplicated().any():
+        duplicates = metrics.loc[
+            metrics["trial_spk"].duplicated(keep=False),
+            "trial_spk",
+        ].head(10).tolist()
+        raise ValueError(f"Duplicate speaker metrics found for: {duplicates}")
+
+    metrics = metrics.set_index("trial_spk")
+    speaker_keys = [str(speaker_id) for speaker_id in speaker_ids]
+    missing_speakers = [key for key in speaker_keys if key not in metrics.index]
+    if missing_speakers:
+        raise ValueError(
+            f"Speaker metrics is missing trial speakers: {missing_speakers[:10]}"
+        )
+
+    trial_means = metrics.loc[speaker_keys, mean_column].to_numpy(dtype=float)
+    aggregated_values = metrics.loc[speaker_keys, aggregated_column].to_numpy(
+        dtype=float
+    )
+    summed_values = metrics.loc[speaker_keys, summed_column].to_numpy(dtype=float)
+    if not (
+        np.isfinite(trial_means).all()
+        and np.isfinite(aggregated_values).all()
+        and np.isfinite(summed_values).all()
+    ):
+        raise ValueError(f"Speaker metrics contains non-finite {column} values")
+    return trial_means, aggregated_values, summed_values
+
+
+def _format_boundary_value(value):
+    return f"{value:.6g}"
+
+
+def plot_summed_evidence(
+    ax,
+    values,
+    y_values,
+    x_min,
+    x_max,
+    zorder,
+    boundary_values=(),
+    boundary_epsilon=0.0,
+):
+    """Plot summed evidence without allowing extreme values to expand the axis."""
+    values = np.asarray(values, dtype=float)
+    y_values = np.asarray(y_values, dtype=float)
+    x_range = x_max - x_min
+    inset = max(x_range * 0.008, np.finfo(float).eps)
+    left = values < x_min
+    right = values > x_max
+    exact_boundary = np.zeros(len(values), dtype=bool)
+    for boundary_value in boundary_values:
+        exact_boundary |= np.isclose(
+            values,
+            boundary_value,
+            rtol=1e-9,
+            atol=max(boundary_epsilon, 1e-12),
+        )
+    exact_boundary &= left | right
+    left &= ~exact_boundary
+    right &= ~exact_boundary
+    inside = ~(left | right)
+    label = "Longitudinal summed evidence"
+    label_used = False
+
+    for selected, marker, marker_x in (
+        (
+            inside,
+            "D",
+            np.clip(values, x_min + inset, x_max - inset),
+        ),
+        (left, "<", np.full_like(values, x_min + inset)),
+        (right, ">", np.full_like(values, x_max - inset)),
+    ):
+        if not selected.any():
+            continue
+        ax.scatter(
+            marker_x[selected],
+            y_values[selected],
+            marker=marker,
+            s=34,
+            facecolor="white",
+            edgecolor="black",
+            linewidth=0.8,
+            label=label if not label_used else None,
+            zorder=zorder,
+        )
+        label_used = True
+
+    for index in np.flatnonzero(left | right):
+        is_left = bool(left[index])
+        ax.annotate(
+            _format_boundary_value(values[index]),
+            xy=(x_min + inset if is_left else x_max - inset, y_values[index]),
+            xytext=(5 if is_left else -5, 0),
+            textcoords="offset points",
+            ha="left" if is_left else "right",
+            va="center",
+            fontsize=5.5,
+            bbox={
+                "facecolor": "white",
+                "edgecolor": "none",
+                "alpha": 0.75,
+                "pad": 0.4,
+            },
+            zorder=zorder + 1,
+        )
+
+
 def plot_metric(
     df,
     column,
@@ -77,21 +223,28 @@ def plot_metric(
     baseline_label=None,
     loc="upper right",
 ):
-    scores = df[column].values
-    valid_scores = scores[np.isfinite(scores)]
-    if len(valid_scores) == 0:
+    valid_rows = df.loc[np.isfinite(df[column]), ["trial_spk", column]]
+    if valid_rows.empty:
         raise ValueError(f"No finite values found in column: {column}")
 
     fig, ax = plt.subplots()
 
-    weights = np.ones_like(valid_scores) / len(valid_scores)
+    speaker_scores = [
+        speaker_rows[column].to_numpy()
+        for _, speaker_rows in valid_rows.groupby("trial_spk", sort=False)
+    ]
+    speaker_weights = [
+        np.full(len(scores), 1.0 / len(valid_rows))
+        for scores in speaker_scores
+    ]
 
     ax.hist(
-        valid_scores,
+        speaker_scores,
         bins=50,
-        weights=weights,
+        weights=speaker_weights,
+        stacked=True,
         alpha=0.4,
-        color="black",
+        color=speaker_colors(len(speaker_scores)),
     )
 
     ax.set_title(title)
@@ -126,6 +279,336 @@ def plot_metric(
     return [png_path, pdf_path]
 
 
+def plot_metric_by_speaker(
+    df,
+    column,
+    title,
+    xlabel,
+    out_dir,
+    filename_base,
+    baseline_val=None,
+    baseline_label=None,
+    loc="upper right",
+    speaker_metrics=None,
+    summed_boundary_values=(),
+    summed_boundary_epsilon=0.0,
+    display_min=None,
+    display_max=None,
+    dpi=300,
+):
+    valid_rows = df.loc[np.isfinite(df[column]), ["trial_spk", column]]
+    if valid_rows.empty:
+        raise ValueError(f"No finite values found in column: {column}")
+
+    speaker_groups = list(valid_rows.groupby("trial_spk", sort=False))
+    speaker_ids = [speaker_id for speaker_id, _ in speaker_groups]
+    trial_means, aggregated_values, summed_values = speaker_indicator_values(
+        speaker_ids,
+        speaker_metrics,
+        column,
+    )
+    all_scores = valid_rows[column].to_numpy()
+    plotted_values = [all_scores]
+    if trial_means is not None:
+        plotted_values.extend((trial_means, aggregated_values))
+    plotted_values = np.concatenate(plotted_values)
+    score_min = float(plotted_values.min())
+    score_max = float(plotted_values.max())
+    score_range = score_max - score_min
+    if score_range == 0.0:
+        score_range = max(abs(score_min) * 0.1, 1.0)
+    padding = score_range * 0.04
+    x_min = score_min - padding
+    x_max = score_max + padding
+    if column == "p":
+        x_min = max(0.0, x_min)
+        x_max = min(1.0, x_max)
+    if display_min is not None:
+        x_min = float(display_min)
+    if display_max is not None:
+        x_max = float(display_max)
+    x_grid = np.linspace(x_min, x_max, 400)
+
+    figure_height = max(4.0, 0.18 * len(speaker_ids) + 1.5)
+    fig, ax = plt.subplots(figsize=(7.0, figure_height))
+    ridge_colors = speaker_colors(len(speaker_ids))
+    ridge_baselines = np.arange(len(speaker_ids) - 1, -1, -1, dtype=float)
+
+    for index, (_, speaker_rows) in enumerate(speaker_groups):
+        scores = speaker_rows[column].to_numpy()
+        # Silverman's rule with an IQR-based scale keeps small speaker groups smooth.
+        score_std = float(np.std(scores, ddof=1)) if len(scores) > 1 else 0.0
+        q1, q3 = np.percentile(scores, [25, 75])
+        robust_scale = min(score_std, float(q3 - q1) / 1.34)
+        if robust_scale <= 0.0:
+            robust_scale = score_std
+        minimum_bandwidth = (x_max - x_min) / 200.0
+        bandwidth = max(
+            0.9 * robust_scale * len(scores) ** (-0.2),
+            minimum_bandwidth,
+        )
+        standardized_distances = (
+            x_grid[:, np.newaxis] - scores[np.newaxis, :]
+        ) / bandwidth
+        density = np.exp(-0.5 * standardized_distances**2).sum(axis=1)
+        density /= len(scores) * bandwidth * np.sqrt(2.0 * np.pi)
+        if density.max() > 0.0:
+            density = density / density.max() * 0.82
+
+        baseline = ridge_baselines[index]
+        ax.fill_between(
+            x_grid,
+            baseline,
+            baseline + density,
+            facecolor=ridge_colors[index],
+            edgecolor="black",
+            linewidth=0.8,
+            alpha=0.65,
+            zorder=2,
+        )
+        ax.hlines(
+            baseline,
+            x_min,
+            x_max,
+            color="black",
+            linewidth=0.5,
+            zorder=3,
+        )
+
+    if trial_means is not None:
+        ax.scatter(
+            trial_means,
+            ridge_baselines + 0.2,
+            marker="o",
+            s=24,
+            facecolor="white",
+            edgecolor="black",
+            linewidth=0.8,
+            label="Direct per-speaker mean",
+            zorder=5,
+        )
+        ax.scatter(
+            aggregated_values,
+            ridge_baselines + 0.48,
+            marker="*",
+            s=58,
+            facecolor="white",
+            edgecolor="black",
+            linewidth=0.8,
+            label="Longitudinal averaged evidence",
+            zorder=6,
+        )
+        plot_summed_evidence(
+            ax,
+            summed_values,
+            ridge_baselines + 0.68,
+            x_min,
+            x_max,
+            zorder=7,
+            boundary_values=summed_boundary_values,
+            boundary_epsilon=summed_boundary_epsilon,
+        )
+
+    ax.set_yticks(
+        ridge_baselines,
+        labels=[
+            f"{speaker_id} ({len(speaker_rows)} trials)"
+            for speaker_id, speaker_rows in speaker_groups
+        ],
+    )
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(-0.25, len(speaker_ids) - 0.05)
+    ax.set_title(title, pad=42 if trial_means is not None else None)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Trial Speaker")
+    ax.tick_params(axis="y", labelsize=6)
+    ax.grid(axis="x", color="gray", alpha=0.2, linewidth=0.6)
+    ax.set_axisbelow(True)
+
+    if baseline_val is not None:
+        ax.axvline(
+            x=baseline_val,
+            color="red",
+            linestyle="dotted",
+            linewidth=1.5,
+            label=baseline_label,
+        )
+    if baseline_val is not None or trial_means is not None:
+        legend_options = {
+            "framealpha": 0.9,
+            "borderaxespad": 0.2,
+            "borderpad": 0.4,
+            "labelspacing": 0.4,
+        }
+        if trial_means is not None:
+            legend_options.update(
+                loc="lower center",
+                bbox_to_anchor=(0.5, 1.01),
+                ncol=2,
+            )
+        else:
+            legend_options["loc"] = loc
+        ax.legend(**legend_options)
+
+    plt.tight_layout()
+
+    png_path = out_dir / f"{filename_base}.png"
+    pdf_path = out_dir / f"{filename_base}.pdf"
+    plt.savefig(png_path, dpi=dpi, bbox_inches="tight")
+    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    return [png_path, pdf_path]
+
+
+def plot_metric_by_speaker_heatmap(
+    df,
+    column,
+    title,
+    xlabel,
+    out_dir,
+    filename_base,
+    baseline_val=None,
+    baseline_label=None,
+    loc="upper right",
+    speaker_metrics=None,
+    summed_boundary_values=(),
+    summed_boundary_epsilon=0.0,
+    display_min=None,
+    display_max=None,
+    dpi=300,
+):
+    valid_rows = df.loc[np.isfinite(df[column]), ["trial_spk", column]]
+    if valid_rows.empty:
+        raise ValueError(f"No finite values found in column: {column}")
+
+    speaker_groups = list(valid_rows.groupby("trial_spk", sort=False))
+    speaker_ids = [speaker_id for speaker_id, _ in speaker_groups]
+    trial_means, aggregated_values, summed_values = speaker_indicator_values(
+        speaker_ids,
+        speaker_metrics,
+        column,
+    )
+    bin_range_values = [valid_rows[column].to_numpy()]
+    if trial_means is not None:
+        bin_range_values.extend((trial_means, aggregated_values))
+    bin_range_values = np.concatenate(bin_range_values)
+    bin_min = float(bin_range_values.min())
+    bin_max = float(bin_range_values.max())
+    if display_min is not None:
+        bin_min = min(bin_min, float(display_min))
+    if display_max is not None:
+        bin_max = max(bin_max, float(display_max))
+    bin_edges = np.linspace(bin_min, bin_max, 51)
+    bin_counts = np.array(
+        [
+            np.histogram(speaker_rows[column], bins=bin_edges)[0]
+            for _, speaker_rows in speaker_groups
+        ],
+        dtype=float,
+    )
+    relative_frequencies = bin_counts / bin_counts.sum(axis=1, keepdims=True)
+
+    figure_height = max(4.0, 0.18 * len(speaker_ids) + 1.5)
+    fig, ax = plt.subplots(figsize=(7.0, figure_height))
+    mesh = ax.pcolormesh(
+        bin_edges,
+        np.arange(len(speaker_ids) + 1),
+        relative_frequencies,
+        cmap="viridis",
+        vmin=0.0,
+        vmax=float(relative_frequencies.max()),
+        shading="flat",
+        rasterized=True,
+    )
+
+    ax.set_yticks(
+        np.arange(len(speaker_ids)) + 0.5,
+        labels=[
+            f"{speaker_id} ({len(speaker_rows)} trials)"
+            for speaker_id, speaker_rows in speaker_groups
+        ],
+    )
+    ax.invert_yaxis()
+    ax.set_title(title, pad=42 if trial_means is not None else None)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Trial Speaker")
+    ax.tick_params(axis="y", labelsize=6)
+
+    if trial_means is not None:
+        y_values = np.arange(len(speaker_ids)) + 0.5
+        ax.scatter(
+            trial_means,
+            y_values,
+            marker="o",
+            s=22,
+            facecolor="white",
+            edgecolor="black",
+            linewidth=0.7,
+            label="Direct per-speaker mean",
+            zorder=4,
+        )
+        ax.scatter(
+            aggregated_values,
+            y_values + 0.12,
+            marker="*",
+            s=52,
+            facecolor="white",
+            edgecolor="black",
+            linewidth=0.7,
+            label="Longitudinal averaged evidence",
+            zorder=5,
+        )
+        plot_summed_evidence(
+            ax,
+            summed_values,
+            y_values - 0.15,
+            float(bin_edges[0]),
+            float(bin_edges[-1]),
+            zorder=6,
+            boundary_values=summed_boundary_values,
+            boundary_epsilon=summed_boundary_epsilon,
+        )
+
+    colorbar = fig.colorbar(mesh, ax=ax, pad=0.02)
+    colorbar.set_label("Within-Speaker Relative Frequency")
+
+    if baseline_val is not None:
+        ax.axvline(
+            x=baseline_val,
+            color="red",
+            linestyle="dotted",
+            linewidth=1.5,
+            label=baseline_label,
+        )
+    if baseline_val is not None or trial_means is not None:
+        legend_options = {
+            "framealpha": 0.9,
+            "borderaxespad": 0.2,
+            "borderpad": 0.4,
+            "labelspacing": 0.4,
+        }
+        if trial_means is not None:
+            legend_options.update(
+                loc="lower center",
+                bbox_to_anchor=(0.5, 1.01),
+                ncol=2,
+            )
+        else:
+            legend_options["loc"] = loc
+        ax.legend(**legend_options)
+
+    plt.tight_layout()
+
+    png_path = out_dir / f"{filename_base}.png"
+    pdf_path = out_dir / f"{filename_base}.pdf"
+    plt.savefig(png_path, dpi=dpi, bbox_inches="tight")
+    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+
+    return [png_path, pdf_path]
+
+
 def get_n_enrolments(experiment_dir, df_lid):
     metrics_path = experiment_dir / METRICS_FILE
     if metrics_path.is_file():
@@ -143,7 +626,7 @@ def load_lid_dataframe(experiment_dir):
         raise FileNotFoundError(f"Missing required LID file: {experiment_lid_path}")
 
     df_lid = pd.read_csv(experiment_lid_path)
-    required_columns = {"p", "LID"}
+    required_columns = {"trial_spk", "p", "LID"}
     missing_columns = required_columns - set(df_lid.columns)
     if missing_columns:
         raise ValueError(
@@ -168,6 +651,60 @@ def plot_probability_distribution(experiment_dir, df_lid, out_dir):
     )
 
 
+def plot_probability_distribution_by_speaker(
+    experiment_dir,
+    df_lid,
+    out_dir,
+    speaker_metrics=None,
+    dpi=300,
+):
+    n_enrolments = get_n_enrolments(experiment_dir, df_lid)
+
+    return plot_metric_by_speaker(
+        df_lid,
+        column="p",
+        title=f"Target Recognition Probability by Trial Speaker ({experiment_dir.name})",
+        xlabel="Probability",
+        out_dir=out_dir,
+        filename_base="probability_distribution_by_speaker",
+        baseline_val=1.0 / n_enrolments,
+        baseline_label=f"Random Guess (p = 1/{n_enrolments})",
+        speaker_metrics=speaker_metrics,
+        summed_boundary_values=(1.0,),
+        summed_boundary_epsilon=0.01,
+        display_min=0.0,
+        display_max=1.0,
+        dpi=dpi,
+    )
+
+
+def plot_probability_distribution_by_speaker_heatmap(
+    experiment_dir,
+    df_lid,
+    out_dir,
+    speaker_metrics=None,
+    dpi=300,
+):
+    n_enrolments = get_n_enrolments(experiment_dir, df_lid)
+
+    return plot_metric_by_speaker_heatmap(
+        df_lid,
+        column="p",
+        title=f"Target Recognition Probability by Trial Speaker ({experiment_dir.name})",
+        xlabel="Probability",
+        out_dir=out_dir,
+        filename_base="probability_distribution_by_speaker_heatmap",
+        baseline_val=1.0 / n_enrolments,
+        baseline_label=f"Random Guess (p = 1/{n_enrolments})",
+        speaker_metrics=speaker_metrics,
+        summed_boundary_values=(1.0,),
+        summed_boundary_epsilon=0.01,
+        display_min=0.0,
+        display_max=1.0,
+        dpi=dpi,
+    )
+
+
 def plot_lid_distribution(experiment_dir, df_lid, out_dir):
     return plot_metric(
         df_lid,
@@ -180,6 +717,114 @@ def plot_lid_distribution(experiment_dir, df_lid, out_dir):
         baseline_label="No information disclosure",
         loc="upper left",
     )
+
+
+def plot_lid_distribution_by_speaker(
+    experiment_dir,
+    df_lid,
+    out_dir,
+    speaker_metrics=None,
+    dpi=300,
+):
+    n_enrolments = get_n_enrolments(experiment_dir, df_lid)
+
+    return plot_metric_by_speaker(
+        df_lid,
+        column="LID",
+        title=f"Local Information Disclosure by Trial Speaker ({experiment_dir.name})",
+        xlabel="Local Information Disclosure (bits)",
+        out_dir=out_dir,
+        filename_base="lid_distribution_by_speaker",
+        baseline_val=0.0,
+        baseline_label="No information disclosure",
+        loc="upper left",
+        speaker_metrics=speaker_metrics,
+        summed_boundary_values=(np.log2(n_enrolments),),
+        summed_boundary_epsilon=-np.log2(0.99),
+        display_max=np.log2(n_enrolments),
+        dpi=dpi,
+    )
+
+
+def plot_lid_distribution_by_speaker_heatmap(
+    experiment_dir,
+    df_lid,
+    out_dir,
+    speaker_metrics=None,
+    dpi=300,
+):
+    n_enrolments = get_n_enrolments(experiment_dir, df_lid)
+
+    return plot_metric_by_speaker_heatmap(
+        df_lid,
+        column="LID",
+        title=f"Local Information Disclosure by Trial Speaker ({experiment_dir.name})",
+        xlabel="Local Information Disclosure (bits)",
+        out_dir=out_dir,
+        filename_base="lid_distribution_by_speaker_heatmap",
+        baseline_val=0.0,
+        baseline_label="No information disclosure",
+        loc="upper left",
+        speaker_metrics=speaker_metrics,
+        summed_boundary_values=(np.log2(n_enrolments),),
+        summed_boundary_epsilon=-np.log2(0.99),
+        display_max=np.log2(n_enrolments),
+        dpi=dpi,
+    )
+
+
+def regenerate_longitudinal_speaker_plots(
+    experiment_dir,
+    df_lid,
+    speaker_metrics,
+    dpi=300,
+    out_dir=None,
+):
+    if out_dir is None:
+        out_dir = RESULTS_DIR / experiment_dir.name / "plots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    with plt.rc_context():
+        configure_matplotlib()
+        plot_paths = []
+        plot_paths.extend(
+            plot_probability_distribution_by_speaker(
+                experiment_dir,
+                df_lid,
+                out_dir,
+                speaker_metrics=speaker_metrics,
+                dpi=dpi,
+            )
+        )
+        plot_paths.extend(
+            plot_probability_distribution_by_speaker_heatmap(
+                experiment_dir,
+                df_lid,
+                out_dir,
+                speaker_metrics=speaker_metrics,
+                dpi=dpi,
+            )
+        )
+        plot_paths.extend(
+            plot_lid_distribution_by_speaker(
+                experiment_dir,
+                df_lid,
+                out_dir,
+                speaker_metrics=speaker_metrics,
+                dpi=dpi,
+            )
+        )
+        plot_paths.extend(
+            plot_lid_distribution_by_speaker_heatmap(
+                experiment_dir,
+                df_lid,
+                out_dir,
+                speaker_metrics=speaker_metrics,
+                dpi=dpi,
+            )
+        )
+
+    return plot_paths
 
 
 def experiment_plot_style(experiment_name):
@@ -277,7 +922,21 @@ def process_experiment(experiment_dir):
 
     plot_paths = []
     plot_paths.extend(plot_probability_distribution(experiment_dir, df_lid, out_dir))
+    plot_paths.extend(
+        plot_probability_distribution_by_speaker(experiment_dir, df_lid, out_dir)
+    )
+    plot_paths.extend(
+        plot_probability_distribution_by_speaker_heatmap(
+            experiment_dir,
+            df_lid,
+            out_dir,
+        )
+    )
     plot_paths.extend(plot_lid_distribution(experiment_dir, df_lid, out_dir))
+    plot_paths.extend(plot_lid_distribution_by_speaker(experiment_dir, df_lid, out_dir))
+    plot_paths.extend(
+        plot_lid_distribution_by_speaker_heatmap(experiment_dir, df_lid, out_dir)
+    )
 
     return {
         "experiment": experiment_dir.name,
@@ -689,7 +1348,8 @@ if __name__ == "__main__":
     print("STEP 6. Plotting local information disclosure results.")
     print(SEPARATOR)
     print(
-        "Creating probability/LID histograms, combined summaries, and paper artifacts."
+        "Creating probability/LID histograms, speaker ridgelines and heatmaps, "
+        "combined summaries, and paper artifacts."
     )
     print()
 

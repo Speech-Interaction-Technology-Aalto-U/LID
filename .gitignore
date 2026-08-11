@@ -26,4 +26,8 @@ data/experiments/**
 !data/shared/
 !data/shared/**
 
+2026embeddings.zip
+
+data/old_experiments/
+
 .DS_Store
