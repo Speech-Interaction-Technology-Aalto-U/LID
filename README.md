@@ -164,8 +164,10 @@ For each experiment, outputs are written to `data/experiments/<experiment>/long/
 * `calibration.json` and `calibration_diagnostics.csv`: development-only fitted
   parameters, full-development metrics, and leave-one-speaker-out diagnostics.
 * `interactive_longitudinal.html`: a self-contained LID/probability heatmap with
-  live metrics and histograms, a global temperature control, separate `tau` and
-  `rho` controls for both adjusted methods, and fitted-value reset buttons.
+  development/test display switching, an individual-trial display temperature,
+  live fixed-axis histograms and metrics, individual/global candidate matrices,
+  a global temperature control, separate `tau` and `rho` controls for both
+  adjusted methods, and development-fitted reset buttons.
 
 The exact formulas, data-split safeguards, interpretation guidance, and artifact
 schema are documented in [`src/long_leakage/readme.md`](src/long_leakage/readme.md).

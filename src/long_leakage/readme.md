@@ -67,6 +67,57 @@ temperature when the target is not the highest-scoring candidate. For that
 reason, sum and average are reference assumptions, not upper and lower bounds
 on disclosure.
 
+## Original score calibration and the individual display temperature
+
+The original score-calibration step writes:
+
+```text
+l_ij = w * z_ij + b
+```
+
+where `z_ij` is candidate `j`'s normalized score for trial `i`. The user's
+observation that this scale overlaps with longitudinal temperature is correct.
+For an individual trial with display temperature `U`:
+
+```text
+softmax((w * z_i + b) / U) = softmax((w / U) * z_i)
+```
+
+The intercept disappears because it is the same for every enrolment candidate.
+Likewise, after aggregating `k` trials:
+
+```text
+softmax(sum_i(w * z_i + b) / T)
+  = softmax((w / T) * sum_i z_i)
+```
+
+The common `k*b` term disappears. Consequently, a refitted global aggregate
+identifies the ratio `w/T`, not `w` and `T` separately. Multiplying `w` by a
+constant and refitting `T` can produce the same aggregate posterior. The
+original calibration still matters for individual-trial probabilities and for
+the numerical interpretation of a longitudinal temperature that is not
+refitted.
+
+The interactive report therefore exposes a separate **individual trial display
+temperature** `U`:
+
+* `Use initial fit` sets `U=1`, reproducing the original calibrated LLRs.
+* `Use NLL fit` loads a speaker-balanced multiclass-NLL temperature fitted on
+  development individual trials only.
+* The displayed effective calibration weight is `w_effective = w/U`.
+* `U` updates the gray before-aggregation histograms, the individual-trial
+  distribution in the main plot, the direct-mean marker and metrics, and the
+  individual candidate matrix.
+* `U` deliberately does not change the frozen longitudinal methods. Otherwise
+  changing both `U` and aggregate `T` would expose two controls for essentially
+  the same aggregate scale and would no longer represent the saved fitted model.
+
+The global longitudinal temperature should not be reused automatically as the
+individual temperature. It was fitted to correct confidence after combining
+dependent observations, whereas `U` asks whether one observation is calibrated.
+Any future joint fit must fix one scale convention or otherwise constrain the
+two parameters to make them identifiable.
+
 ## Approach 1: summed LLR
 
 Formula:
@@ -329,6 +380,7 @@ The pipeline enforces this split:
 development:
   reconstruct LLRs from llr, or from z_score and calibration parameters
   calculate development embedding-similarity features
+  fit the individual-trial display temperature
   fit global T or the (tau, rho) pairs
   calculate LOO diagnostics
 
@@ -343,6 +395,10 @@ No parameter or model family is selected automatically from test results. Test
 embeddings are inputs available to the similarity-adjusted attacker; test
 identity outcomes are not used to fit their weights. Slider settings are
 sensitivity analyses and must not be reported as newly optimized test results.
+The report's development/test toggle changes only the displayed arrays. It
+never invokes a fitting function and never changes a fitted-value button. The
+development view is in-sample and is provided for understanding model behavior,
+not for reporting final performance.
 
 The development set was already used for trial-level score calibration. Reusing
 it for longitudinal calibration is pragmatic but introduces finite-sample risk.
@@ -384,20 +440,30 @@ speakers.
 contains:
 
 * LID and target-probability views of the per-speaker individual-trial heatmap;
+* a top-right switch between test and development displays, with test as the
+  default and all parameters frozen at their development fits;
+* an individual-trial temperature with initial-fit and development-NLL reset
+  buttons and a displayed equivalent `w`;
 * fixed markers for direct mean, sum, average, and the Brier global fit;
 * a red global-temperature marker controlled by the original `T` slider;
 * separate `tau` and `rho` controls for count adjustment;
 * separate `tau` and `rho` controls for embedding adjustment;
 * buttons that restore NLL, Brier, or fitted two-parameter values;
 * live method metrics for every fixed and adjustable approach;
-* live before/after histograms for all three adjustable families;
+* live before/after histograms for all three adjustable families, using fixed
+  x and 0--100% y axes, a dotted null-disclosure line at `LID=0` or `p=1/N`,
+  and live ALID, PDR, and LID maximum values beneath each panel;
+* candidate-by-trial and candidate-by-speaker heatmaps controlled by the
+  individual and global temperatures respectively;
 * an NLL/Brier development-objective toggle;
 * full-fit and LOO diagnostic tables;
 * adjustable heatmap row height and a responsive laptop/mobile layout.
 
 Values outside the individual-trial heatmap domain are clamped only for marker
 placement. Tooltips report their actual values. The graph height control changes
-row density without changing any result.
+row density without changing any result. Candidate-matrix color ranges are fixed
+while sliders move and are labelled separately for the individual and aggregate
+panels.
 
 ## Output layout
 

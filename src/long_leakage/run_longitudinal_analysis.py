@@ -101,6 +101,8 @@ def main():
             f"{calibrated_summary['fitted_temperature']:.6g}, "
             f"global T(Brier)="
             f"{calibrated_summary['fitted_brier_temperature']:.6g}, "
+            f"individual T(NLL)="
+            f"{calibrated_summary['fitted_individual_temperature']:.6g}, "
             f"count (T={count_parameters['temperature']:.6g}, "
             f"rho={count_parameters['rho']:.6g}), embedding "
             f"(T={similarity_parameters['temperature']:.6g}, "

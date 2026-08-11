@@ -356,6 +356,61 @@ def _multiclass_metrics(logits, target_indices):
     }
 
 
+def fit_individual_trial_temperature(evidence):
+    """Fit a speaker-balanced trial-level temperature by development NLL."""
+    enroll_index = {
+        speaker_id: index
+        for index, speaker_id in enumerate(evidence.enroll_speakers)
+    }
+    missing = sorted(set(evidence.trial_speakers) - set(enroll_index))
+    if missing:
+        raise ValueError(
+            "Individual temperature fitting requires a mated enrolment for "
+            f"every trial speaker. Missing: {missing[:10]}"
+        )
+    targets = np.asarray(
+        [enroll_index[speaker_id] for speaker_id in evidence.trial_speakers],
+        dtype=int,
+    )
+    speaker_counts = {
+        speaker_id: evidence.trial_speakers.count(speaker_id)
+        for speaker_id in evidence.speaker_ids
+    }
+    weights = np.asarray(
+        [
+            1.0
+            / (
+                evidence.n_trial_speakers
+                * speaker_counts[speaker_id]
+            )
+            for speaker_id in evidence.trial_speakers
+        ],
+        dtype=float,
+    )
+    rows = np.arange(evidence.n_trials)
+
+    def loss(temperature):
+        ln_p, _ = _stable_softmax(evidence.raw_llr / temperature)
+        return float((-ln_p[rows, targets] * weights).sum())
+
+    fitted_temperature = _grid_refined_minimum(
+        loss,
+        lower=0.05,
+        upper=100.0,
+        logarithmic=True,
+    )
+    return {
+        "temperature": fitted_temperature,
+        "initial_temperature": 1.0,
+        "fit_objective": "speaker_balanced_multiclass_nll",
+        "fitted_on": "development individual trials only",
+        "n_speakers": evidence.n_trial_speakers,
+        "n_trials": evidence.n_trials,
+        "initial_nll_nats": loss(1.0),
+        "fitted_nll_nats": loss(fitted_temperature),
+    }
+
+
 def _grid_refined_minimum(
     objective,
     lower,
@@ -808,19 +863,76 @@ def analyse_calibrated_aggregations(experiment_dir, dpi=300):
         )
 
     method_calibration, folds = calibrate_on_development(development)
-    results = {
-        method: aggregate_result(
-            test,
-            method,
-            method_calibration[method]["fitted_parameters"],
-        )
-        for method in METHOD_ORDER
+    split_evidence = {
+        "development": development_evidence,
+        "test": test_evidence,
     }
+    split_datasets = {
+        "development": development,
+        "test": test,
+    }
+    split_results = {
+        split: {
+            method: aggregate_result(
+                split_datasets[split],
+                method,
+                method_calibration[method]["fitted_parameters"],
+            )
+            for method in METHOD_ORDER
+        }
+        for split in split_datasets
+    }
+    split_comparisons = {
+        split: _method_comparison_dataframe(
+            split_evidence[split],
+            split_datasets[split],
+            split_results[split],
+        )
+        for split in split_datasets
+    }
+    results = split_results["test"]
+
+    score_calibration_path = (
+        experiment_dir / "outputs" / "calibration_parameters.json"
+    )
+    if not score_calibration_path.is_file():
+        raise FileNotFoundError(
+            "Missing original score calibration parameters: "
+            f"{score_calibration_path}"
+        )
+    score_calibration = json.loads(score_calibration_path.read_text())
+    try:
+        original_weight = float(score_calibration["w"])
+        original_intercept = float(score_calibration["b"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(
+            f"{score_calibration_path} must contain numeric w and b values"
+        ) from error
+    if not np.isfinite((original_weight, original_intercept)).all():
+        raise ValueError(
+            f"{score_calibration_path} must contain finite w and b values"
+        )
+    individual_temperature = fit_individual_trial_temperature(
+        development_evidence
+    )
+    individual_temperature.update(
+        {
+            "original_weight_w": original_weight,
+            "original_intercept_b": original_intercept,
+            "equivalent_weight_at_nll_fit": (
+                original_weight / individual_temperature["temperature"]
+            ),
+            "display_scope": (
+                "individual observations only; longitudinal fitted outputs "
+                "remain frozen"
+            ),
+        }
+    )
 
     output_dir = experiment_dir / "long"
     output_dir.mkdir(parents=True, exist_ok=True)
     calibration_payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "experiment": experiment_dir.name,
         "temperature_convention": "softmax(sum(LLR) / effective_temperature)",
         "data_usage": {
@@ -829,6 +941,7 @@ def analyse_calibrated_aggregations(experiment_dir, dpi=300):
             "test_usage": "final evaluation and sensitivity display only",
             "automatic_test_based_model_selection": False,
         },
+        "individual_trial_temperature": individual_temperature,
         "development": {
             "n_speakers": development.n_speakers,
             "min_trials_per_speaker": int(development.counts.min()),
@@ -863,7 +976,7 @@ def analyse_calibrated_aggregations(experiment_dir, dpi=300):
     sweep_path = output_dir / "temperature_sweep.csv"
     sweep.to_csv(sweep_path, index=False)
 
-    comparison = _method_comparison_dataframe(test_evidence, test, results)
+    comparison = split_comparisons["test"]
     comparison_path = output_dir / "method_comparison.csv"
     comparison.to_csv(comparison_path, index=False)
     redundancy_path = output_dir / "speaker_redundancy.csv"
@@ -912,10 +1025,15 @@ def analyse_calibrated_aggregations(experiment_dir, dpi=300):
     write_interactive_report(
         report_path,
         experiment_dir.name,
-        test_evidence,
-        test,
-        results,
-        comparison,
+        {
+            split: {
+                "evidence": split_evidence[split],
+                "dataset": split_datasets[split],
+                "results": split_results[split],
+                "comparison": split_comparisons[split],
+            }
+            for split in split_evidence
+        },
         calibration_payload,
         sweep,
     )
@@ -960,4 +1078,7 @@ def analyse_calibrated_aggregations(experiment_dir, dpi=300):
         "fitted_similarity_parameters": method_calibration[
             "similarity_adjusted"
         ]["fitted_parameters"],
+        "fitted_individual_temperature": individual_temperature[
+            "temperature"
+        ],
     }

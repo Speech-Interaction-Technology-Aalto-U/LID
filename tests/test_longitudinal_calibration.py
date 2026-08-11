@@ -20,6 +20,7 @@ from long_leakage.calibration import (
     aggregate_logits,
     analyse_calibrated_aggregations,
     build_calibration_dataset,
+    fit_individual_trial_temperature,
     fit_method_parameter,
     fit_method_parameters,
     load_development_scores,
@@ -177,6 +178,23 @@ class LongitudinalCalibrationTests(unittest.TestCase):
         self.assertGreater(fitted, 0.0)
         self.assertLessEqual(fitted_nll, summed_nll + 1e-10)
 
+    def test_individual_trial_temperature_uses_development_evidence(self):
+        evidence = build_longitudinal_evidence(
+            longitudinal_scores(scale=1.6)
+        )
+
+        calibration = fit_individual_trial_temperature(evidence)
+
+        self.assertGreater(calibration["temperature"], 0.0)
+        self.assertLessEqual(
+            calibration["fitted_nll_nats"],
+            calibration["initial_nll_nats"] + 1e-10,
+        )
+        self.assertEqual(
+            calibration["fitted_on"],
+            "development individual trials only",
+        )
+
     def test_joint_fit_profiles_temperature_to_find_interior_rho(self):
         margins = np.asarray([2.0, 2.0, -1.0, 6.0, 6.0, -3.0])
         sums = np.column_stack((margins, np.zeros(len(margins))))
@@ -288,6 +306,11 @@ class LongitudinalCalibrationTests(unittest.TestCase):
                 scores_dir / "test_scores.csv",
                 index=False,
             )
+            outputs_dir = experiment_dir / "outputs"
+            outputs_dir.mkdir()
+            (outputs_dir / "calibration_parameters.json").write_text(
+                json.dumps({"w": 1.25, "b": -0.4})
+            )
             embeddings_dir = experiment_dir / "embeddings"
             embeddings_dir.mkdir()
             longitudinal_embeddings().to_parquet(
@@ -299,6 +322,7 @@ class LongitudinalCalibrationTests(unittest.TestCase):
             output_dir = experiment_dir / "long"
 
             self.assertGreater(summary["fitted_temperature"], 0.0)
+            self.assertGreater(summary["fitted_individual_temperature"], 0.0)
             for filename in (
                 "calibration.json",
                 "calibration_diagnostics.csv",
@@ -340,10 +364,16 @@ class LongitudinalCalibrationTests(unittest.TestCase):
             report = (output_dir / "interactive_longitudinal.html").read_text()
             self.assertIn("Global temperature", report)
             self.assertIn("Use Brier fit", report)
+            self.assertIn("Use initial fit", report)
+            self.assertIn('data-split="development"', report)
             self.assertIn("Embedding-adjusted", report)
             self.assertIn("LOO expectation", report)
             self.assertIn('id="global-histogram"', report)
+            self.assertIn('id="individual-matrix"', report)
+            self.assertIn('id="global-matrix"', report)
             self.assertIn('"automatic_test_based_model_selection":false', report)
+            self.assertIn('"schema_version":3', report)
+            self.assertIn('"splits":{"development"', report)
             self.assertNotIn("https://", report)
 
 
