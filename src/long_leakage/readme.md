@@ -118,6 +118,36 @@ dependent observations, whereas `U` asks whether one observation is calibrated.
 Any future joint fit must fix one scale convention or otherwise constrain the
 two parameters to make them identifiable.
 
+### Individual-fit objective versus global-fit objective
+
+These are different optimization problems, even though both use NLL. The
+individual fit does sum trial-level errors, as follows:
+
+```text
+NLL_individual(U)
+  = -(1/M) * sum_s (1/k_s) * sum_i log softmax(l_si / U)[true_s]
+```
+
+Each development speaker has total weight `1/M`; their `k_s` trials divide that
+weight equally. The global fit first combines all trials belonging to a speaker:
+
+```text
+S_s = sum_i l_si
+NLL_global(T)
+  = -(1/M) * sum_s log softmax(S_s / T)[true_s]
+```
+
+Thus the individual objective has one error per trial with speaker-balancing
+weights, while the global objective has exactly one error per summed development
+speaker. `U` corrects the confidence of one observation. `T` corrects the scale
+after evidence has accumulated, including correction for dependence between
+observations. Their fitted numerical values should not be expected to agree.
+
+The report always labels a fitted divisor and a loss separately. For example,
+`NLL-fit T = 8.27` means that the NLL-minimizing divisor is `8.27`; it does not
+mean that the NLL value is `8.27`. The corresponding achieved development NLL
+is shown alongside the effective score scale `w/T`.
+
 ## Approach 1: summed LLR
 
 Formula:
@@ -165,10 +195,12 @@ z_s = S_s / T
 T > 0
 ```
 
-One shared `T` is fitted using one final aggregate per development speaker. This
-makes the objective speaker-balanced: a speaker with more utterances contributes
-one outcome rather than one outcome per trial. The full-development parameter is
-then frozen and applied to test speakers.
+One shared `T` is fitted using one final aggregate per development speaker. Raw
+trial losses are not summed for this fit: the LLR vectors are summed first, and
+then the aggregate probability contributes one loss. This makes the objective
+speaker-balanced: a speaker with more utterances contributes one outcome rather
+than one outcome per trial. The full-development parameter is then frozen and
+applied to test speakers.
 
 There are now two global fits:
 
@@ -442,20 +474,25 @@ contains:
 * LID and target-probability views of the per-speaker individual-trial heatmap;
 * a top-right switch between test and development displays, with test as the
   default and all parameters frozen at their development fits;
+* clearly separated individual `U` and aggregate `T` fit units, fitted divisors,
+  achieved losses, and the effective score weights `w/U` and `w/T`;
 * an individual-trial temperature with initial-fit and development-NLL reset
-  buttons and a displayed equivalent `w`;
+  buttons;
 * fixed markers for direct mean, sum, average, and the Brier global fit;
 * a red global-temperature marker controlled by the original `T` slider;
-* separate `tau` and `rho` controls for count adjustment;
-* separate `tau` and `rho` controls for embedding adjustment;
+* an advanced-methods checkbox that reveals the separate `tau` and `rho`
+  controls for count and embedding adjustment;
 * buttons that restore NLL, Brier, or fitted two-parameter values;
-* live method metrics for every fixed and adjustable approach;
+* live ALID, PDR, and LID maximum directly below every visible slider family,
+  plus the full method table;
 * live before/after histograms for all three adjustable families, using fixed
   x and 0--100% y axes, a dotted null-disclosure line at `LID=0` or `p=1/N`,
-  and live ALID, PDR, and LID maximum values beneath each panel;
+  and labelled vertical lines and values for the before/after means;
 * candidate-by-trial and candidate-by-speaker heatmaps controlled by the
   individual and global temperatures respectively;
-* an NLL/Brier development-objective toggle;
+* an NLL/Brier development-aggregate objective toggle with the active equation
+  and an explicit statement that there is one objective term per development
+  speaker;
 * full-fit and LOO diagnostic tables;
 * adjustable heatmap row height and a responsive laptop/mobile layout.
 

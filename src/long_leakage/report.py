@@ -262,6 +262,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   --purple: #7e22ce;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { background: var(--paper); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; max-width: 100%; overflow-x: clip; }
 body { margin: 0; min-width: 320px; max-width: 100%; overflow-x: clip; }
 header { border-bottom: 1px solid var(--line); padding: 20px max(20px, calc((100vw - 1500px) / 2)); }
@@ -274,25 +275,36 @@ main { max-width: 1500px; min-width: 0; width: 100%; margin: 0 auto; }
 .workbench { background: var(--soft); border-bottom: 1px solid #aeb7bf; position: sticky; top: 0; z-index: 10; }
 .view-row { align-items: center; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 16px 28px; padding: 9px 20px; }
 .view-control { align-items: center; display: flex; gap: 9px; }
-.split-control { margin-left: auto; }
+.advanced-toggle { margin-left: auto; }
+.advanced-toggle label { align-items: center; cursor: pointer; display: inline-flex; gap: 7px; }
+.advanced-toggle input { accent-color: var(--ink); }
 .control-label { color: var(--muted); font-size: 10px; font-weight: 760; text-transform: uppercase; white-space: nowrap; }
 .segmented { display: inline-flex; border: 1px solid #aeb7bf; border-radius: 4px; overflow: hidden; }
 .segmented button { background: white; border: 0; border-right: 1px solid #aeb7bf; color: var(--ink); cursor: pointer; font: inherit; min-height: 31px; padding: 0 11px; }
 .segmented button:last-child { border-right: 0; }
 .segmented button.active { background: var(--ink); color: white; }
-.parameter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.parameter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.parameter-grid.show-advanced { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .parameter-group { border-right: 1px solid var(--line); min-width: 0; padding: 10px 14px 11px; }
 .parameter-group:last-child { border-right: 0; }
+.parameter-grid:not(.show-advanced) .parameter-group:nth-child(2) { border-right: 0; }
 .parameter-title { align-items: center; display: flex; font-size: 12px; font-weight: 740; gap: 7px; margin-bottom: 8px; }
 .parameter-title .swatch { height: 9px; width: 9px; }
+.fit-unit { color: var(--muted); font-size: 9px; font-weight: 500; margin-left: auto; text-align: right; }
 .parameter-line { align-items: center; display: grid; gap: 7px; grid-template-columns: 24px minmax(70px, 1fr) 72px; margin-top: 6px; }
 .parameter-symbol { color: var(--muted); font-size: 11px; font-weight: 760; }
 input[type="range"] { accent-color: currentColor; min-width: 0; width: 100%; }
 input[type="number"] { background: white; border: 1px solid #aeb7bf; border-radius: 3px; color: var(--ink); font: inherit; height: 29px; padding: 0 6px; width: 72px; }
 .fit-row { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; margin-top: 8px; min-height: 29px; }
 .effective-range { color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.control-metrics { border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 7px; padding-top: 6px; }
+.control-metrics span { color: var(--muted); font-size: 8px; text-align: center; text-transform: uppercase; }
+.control-metrics strong { color: var(--ink); display: block; font-size: 10px; font-weight: 700; margin-top: 1px; text-transform: none; }
 button.command { background: white; border: 1px solid #aeb7bf; border-radius: 3px; color: var(--ink); cursor: pointer; font: inherit; font-size: 10px; min-height: 29px; padding: 0 8px; }
 button.command:hover { border-color: var(--ink); }
+.calibration-map { border-bottom: 1px solid var(--line); color: #46515c; font-size: 10px; line-height: 1.45; padding: 8px 20px; }
+.calibration-map strong { color: var(--ink); }
+.calibration-map code { color: var(--ink); }
 .method-bar { border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 17px; min-width: 0; padding: 10px 20px; }
 .method-toggle { align-items: center; cursor: pointer; display: inline-flex; font-size: 12px; gap: 6px; white-space: nowrap; }
 .method-toggle input { accent-color: var(--ink); }
@@ -314,14 +326,18 @@ td { font-variant-numeric: tabular-nums; }
 .histogram-section, .matrix-section { border-top: 1px solid var(--line); padding: 18px 20px 22px; }
 .histogram-legend { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 10px; gap: 8px 15px; }
 .histogram-grid { display: grid; gap: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.histogram-grid:not(.show-advanced) { grid-template-columns: 1fr; }
 .histogram-panel { border-right: 1px solid var(--line); min-width: 0; padding: 10px 13px 0; }
+.histogram-grid:not(.show-advanced) .histogram-panel { border-right: 0; }
 .histogram-panel:last-child { border-right: 0; }
 .histogram-panel h3 { font-size: 12px; margin: 0 0 3px; }
 .histogram-caption { color: var(--muted); font-size: 9px; min-height: 14px; }
+.histogram-means { color: var(--ink); font-size: 9px; font-variant-numeric: tabular-nums; min-height: 14px; }
 .histogram { display: block; height: 220px; width: 100%; }
-.panel-metrics { border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 3px; padding: 7px 0 4px; }
-.panel-metrics span { color: var(--muted); font-size: 8px; text-align: center; text-transform: uppercase; }
-.panel-metrics strong { color: var(--ink); display: block; font-size: 11px; font-weight: 700; margin-top: 2px; text-transform: none; }
+.line-key { border-top: 2px solid; display: inline-block; height: 0; margin-right: 4px; transform: translateY(-2px); width: 15px; }
+.line-key.before { border-color: #4b5563; }
+.line-key.after { border-color: #17202a; }
+.line-key.null { border-color: #ef4444; border-top-style: dotted; }
 .matrix-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .matrix-panel { min-width: 0; padding: 10px 16px 0; }
 .matrix-panel + .matrix-panel { border-left: 1px solid var(--line); }
@@ -332,17 +348,19 @@ td { font-variant-numeric: tabular-nums; }
 .diagnostic-section { min-width: 0; padding: 18px 20px; }
 .diagnostic-section + .diagnostic-section { border-left: 1px solid var(--line); }
 #objective { display: block; height: 250px; width: 100%; }
+.equation { background: var(--soft); border-left: 3px solid #64707b; color: var(--ink); font-size: 10px; line-height: 1.5; margin: 4px 0 8px; padding: 7px 9px; }
+.equation code { white-space: normal; }
 .explanation { color: #46515c; font-size: 10px; line-height: 1.5; margin: 8px 0 0; }
 .explanation strong { color: var(--ink); }
 footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; padding: 12px 20px 22px; }
 @media (max-width: 1200px) and (min-width: 901px) {
-  .parameter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .parameter-grid.show-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .parameter-group:nth-child(2) { border-right: 0; }
-  .parameter-group:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .parameter-grid.show-advanced .parameter-group:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 }
 @media (max-width: 900px) {
   .workbench { position: static; }
-  .parameter-grid { grid-template-columns: 1fr; }
+  .parameter-grid, .parameter-grid.show-advanced { grid-template-columns: 1fr; }
   .parameter-group { border-bottom: 1px solid var(--line); border-right: 0; }
   .parameter-group:last-child { border-bottom: 0; }
   .histogram-grid, .matrix-grid, .diagnostics { grid-template-columns: 1fr; }
@@ -352,7 +370,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
 @media (max-width: 520px) {
   h1 { font-size: 20px; }
   .view-row { align-items: flex-start; flex-direction: column; gap: 8px; }
-  .split-control { margin-left: 0; }
+  .advanced-toggle { margin-left: 0; }
   .parameter-line { grid-template-columns: 24px minmax(80px, 1fr) 82px; }
   input[type="number"] { width: 82px; }
 }
@@ -368,34 +386,42 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
   <section class="workbench" aria-label="Aggregation controls">
     <div class="view-row">
       <div class="view-control"><span class="control-label">Metric</span><div class="segmented" role="group" aria-label="Metric"><button type="button" class="active" data-metric="LID">LID</button><button type="button" data-metric="p">Probability</button></div></div>
-      <div class="view-control"><label class="control-label" for="density-slider">Graph row height</label><input id="density-slider" type="range" min="14" max="34" value="17"><span id="density-value" class="effective-range">17 px</span></div>
+      <div class="view-control"><label class="control-label" for="density-slider">Graph row height</label><input id="density-slider" type="range" min="14" max="34" value="15"><span id="density-value" class="effective-range">15 px</span></div>
+      <div class="view-control advanced-toggle"><label for="show-advanced"><input id="show-advanced" type="checkbox"> <span>Show advanced calibration methods</span></label></div>
       <div class="view-control split-control"><span class="control-label">Displayed data</span><div class="segmented" role="group" aria-label="Displayed data"><button type="button" class="active" data-split="test">Test</button><button type="button" data-split="development">Development</button></div></div>
     </div>
-    <div class="parameter-grid">
+    <div id="parameter-grid" class="parameter-grid">
       <div class="parameter-group" style="color:#4b5563">
-        <div class="parameter-title"><span class="swatch" style="background:#6b7280"></span>Individual trial display</div>
-        <div class="parameter-line"><label class="parameter-symbol" for="individual-temperature">T</label><input id="individual-temperature" type="range" min="0" max="1000"><input id="individual-temperature-number" type="number" min="0.05" step="0.01"></div>
-        <div class="fit-row"><div><button id="individual-use-initial" type="button" class="command">Use initial fit</button> <button id="individual-use-nll" type="button" class="command">Use NLL fit</button></div><span id="individual-effective" class="effective-range"></span></div>
+        <div class="parameter-title"><span class="swatch" style="background:#6b7280"></span>Individual trial temperature U <span class="fit-unit">fit unit: one dev trial</span></div>
+        <div class="parameter-line"><label class="parameter-symbol" for="individual-temperature">U</label><input id="individual-temperature" type="range" min="0" max="1000"><input id="individual-temperature-number" type="number" min="0.05" step="0.01"></div>
+        <div class="fit-row"><div><button id="individual-use-initial" type="button" class="command">Use initial fit</button> <button id="individual-use-nll" type="button" class="command">Use NLL fit</button></div><span id="individual-fit-values" class="effective-range"></span></div>
+        <div id="individual-effective" class="effective-range"></div>
+        <div class="control-metrics"><span>ALID<strong id="individual-control-alid"></strong></span><span>PDR<strong id="individual-control-pdr"></strong></span><span>LID max<strong id="individual-control-maximum"></strong></span></div>
       </div>
       <div class="parameter-group" style="color:var(--red)">
-        <div class="parameter-title"><span class="swatch" style="background:var(--red)"></span>Global temperature</div>
+        <div class="parameter-title"><span class="swatch" style="background:var(--red)"></span>Global aggregate temperature T <span class="fit-unit">fit unit: one dev speaker sum</span></div>
         <div class="parameter-line"><label class="parameter-symbol" for="global-temperature">T</label><input id="global-temperature" type="range" min="0" max="1000"><input id="global-temperature-number" type="number" min="0.05" step="0.01"></div>
         <div class="fit-row"><div><button id="global-use-nll" type="button" class="command">Use NLL fit</button> <button id="global-use-brier" type="button" class="command">Use Brier fit</button></div><span id="global-fit-values" class="effective-range"></span></div>
+        <div id="global-effective" class="effective-range"></div>
+        <div class="control-metrics"><span>ALID<strong id="global-control-alid"></strong></span><span>PDR<strong id="global-control-pdr"></strong></span><span>LID max<strong id="global-control-maximum"></strong></span></div>
       </div>
-      <div class="parameter-group" style="color:var(--teal)">
-        <div class="parameter-title"><span class="swatch" style="background:var(--teal)"></span>Count-adjusted temperature</div>
+      <div class="parameter-group advanced-control" style="color:var(--teal)" hidden>
+        <div class="parameter-title"><span class="swatch" style="background:var(--teal)"></span>Count-adjusted temperature <span class="fit-unit">dev speaker sums</span></div>
         <div class="parameter-line"><label class="parameter-symbol" for="count-temperature">T</label><input id="count-temperature" type="range" min="0" max="1000"><input id="count-temperature-number" type="number" min="0.05" step="0.01"></div>
         <div class="parameter-line"><label class="parameter-symbol" for="count-rho">rho</label><input id="count-rho" type="range" min="0" max="1000"><input id="count-rho-number" type="number" min="0" max="1" step="0.01"></div>
         <div class="fit-row"><button id="count-use-fit" type="button" class="command">Use fitted values</button><span id="count-effective" class="effective-range"></span></div>
+        <div class="control-metrics"><span>ALID<strong id="count-control-alid"></strong></span><span>PDR<strong id="count-control-pdr"></strong></span><span>LID max<strong id="count-control-maximum"></strong></span></div>
       </div>
-      <div class="parameter-group" style="color:var(--purple)">
-        <div class="parameter-title"><span class="swatch" style="background:var(--purple)"></span>Embedding-adjusted temperature</div>
+      <div class="parameter-group advanced-control" style="color:var(--purple)" hidden>
+        <div class="parameter-title"><span class="swatch" style="background:var(--purple)"></span>Embedding-adjusted temperature <span class="fit-unit">dev speaker sums</span></div>
         <div class="parameter-line"><label class="parameter-symbol" for="similarity-temperature">T</label><input id="similarity-temperature" type="range" min="0" max="1000"><input id="similarity-temperature-number" type="number" min="0.05" step="0.01"></div>
         <div class="parameter-line"><label class="parameter-symbol" for="similarity-rho">rho</label><input id="similarity-rho" type="range" min="0" max="1000"><input id="similarity-rho-number" type="number" min="0" max="1" step="0.01"></div>
         <div class="fit-row"><button id="similarity-use-fit" type="button" class="command">Use fitted values</button><span id="similarity-effective" class="effective-range"></span></div>
+        <div class="control-metrics"><span>ALID<strong id="similarity-control-alid"></strong></span><span>PDR<strong id="similarity-control-pdr"></strong></span><span>LID max<strong id="similarity-control-maximum"></strong></span></div>
       </div>
     </div>
   </section>
+  <section class="calibration-map"><strong>Scale connection:</strong> <span id="scale-connection"></span><br><span>Individual NLL fits one calibrated trial at a time (speaker-balanced). Global NLL first forms <code>S_s = sum_i LLR_si</code>, then fits one aggregate outcome per development speaker. Fitted temperatures are divisors, not loss values.</span></section>
   <section id="method-bar" class="method-bar" aria-label="Visible plot markers"></section>
   <section class="metrics-section">
     <div class="section-heading"><h2>Method metrics</h2><span id="metric-scope" class="subtle"></span></div>
@@ -403,11 +429,11 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
   </section>
   <section class="plot-shell"><svg id="heatmap" role="img" aria-label="Longitudinal disclosure by trial speaker"></svg></section>
   <section class="histogram-section">
-    <div class="section-heading"><h2>Before and after aggregation</h2><div class="histogram-legend"><span><span class="swatch" style="background:#9ca3af"></span> Individual trials at display T</span><span>Colored bars: aggregated speakers</span><span><span class="swatch" style="background:#ef4444"></span> Null disclosure</span></div></div>
-    <div class="histogram-grid">
-      <div class="histogram-panel"><h3 style="color:var(--red)">Global temperature</h3><div id="global-histogram-caption" class="histogram-caption"></div><svg id="global-histogram" class="histogram"></svg><div class="panel-metrics"><span>ALID<strong id="global-alid"></strong></span><span>PDR<strong id="global-pdr"></strong></span><span>LID max<strong id="global-maximum"></strong></span></div></div>
-      <div class="histogram-panel"><h3 style="color:var(--teal)">Count-adjusted</h3><div id="count-histogram-caption" class="histogram-caption"></div><svg id="count-histogram" class="histogram"></svg><div class="panel-metrics"><span>ALID<strong id="count-alid"></strong></span><span>PDR<strong id="count-pdr"></strong></span><span>LID max<strong id="count-maximum"></strong></span></div></div>
-      <div class="histogram-panel"><h3 style="color:var(--purple)">Embedding-adjusted</h3><div id="similarity-histogram-caption" class="histogram-caption"></div><svg id="similarity-histogram" class="histogram"></svg><div class="panel-metrics"><span>ALID<strong id="similarity-alid"></strong></span><span>PDR<strong id="similarity-pdr"></strong></span><span>LID max<strong id="similarity-maximum"></strong></span></div></div>
+    <div class="section-heading"><h2>Before and after aggregation</h2><div class="histogram-legend"><span><span class="swatch" style="background:#9ca3af"></span> Individual-trial bars</span><span>Colored bars: speaker aggregates</span><span><span class="line-key before"></span>Before mean</span><span><span class="line-key after"></span>After mean</span><span><span class="line-key null"></span>Null: LID=0 or p=1/N</span></div></div>
+    <div id="histogram-grid" class="histogram-grid">
+      <div class="histogram-panel"><h3 style="color:var(--red)">Global temperature</h3><div id="global-histogram-caption" class="histogram-caption"></div><div id="global-histogram-means" class="histogram-means"></div><svg id="global-histogram" class="histogram"></svg></div>
+      <div class="histogram-panel advanced-panel" hidden><h3 style="color:var(--teal)">Count-adjusted</h3><div id="count-histogram-caption" class="histogram-caption"></div><div id="count-histogram-means" class="histogram-means"></div><svg id="count-histogram" class="histogram"></svg></div>
+      <div class="histogram-panel advanced-panel" hidden><h3 style="color:var(--purple)">Embedding-adjusted</h3><div id="similarity-histogram-caption" class="histogram-caption"></div><div id="similarity-histogram-means" class="histogram-means"></div><svg id="similarity-histogram" class="histogram"></svg></div>
     </div>
   </section>
   <section class="matrix-section">
@@ -419,9 +445,10 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
   </section>
   <section class="diagnostics">
     <div class="diagnostic-section">
-      <div class="section-heading"><h2>Development temperature objective</h2><div class="segmented" role="group" aria-label="Calibration objective"><button type="button" class="active" data-objective="nll">NLL</button><button type="button" data-objective="brier">Brier</button></div></div>
+      <div class="section-heading"><h2>Development aggregate objective</h2><div class="segmented" role="group" aria-label="Calibration objective"><button type="button" class="active" data-objective="nll">NLL</button><button type="button" data-objective="brier">Brier</button></div></div>
+      <div id="objective-equation" class="equation"></div>
       <svg id="objective" role="img" aria-label="Development calibration objective by temperature"></svg>
-      <p class="explanation"><strong>NLL</strong> is <code>-log(q_true)</code>. Every nonmated logit still matters because it appears in the softmax denominator of <code>q_true</code>. <strong>Brier</strong> explicitly sums squared probability error over all enrolment candidates.</p>
+      <p id="objective-explanation" class="explanation"></p>
     </div>
     <div class="diagnostic-section">
       <h2>Development calibration diagnostics</h2>
@@ -429,7 +456,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
       <div class="table-wrap"><table><thead><tr><th>Method</th><th>Objective</th><th>Fitted parameters</th><th>LOO refit range</th><th>Fit NLL</th><th>LOO NLL</th><th>Fit Brier</th><th>LOO Brier</th></tr></thead><tbody id="diagnostic-rows"></tbody></table></div>
     </div>
   </section>
-  <footer>Every fitted button loads a development-only value. Switching the displayed split never refits a parameter. The individual T is a display sensitivity for individual observations; aggregate methods remain at their frozen score calibration. Since the calibration intercept is common across candidates it cancels in softmax, and a refitted global aggregate depends on the ratio w/T rather than w and T separately.</footer>
+  <footer>Every fitted button loads a development-only value. Switching the displayed split never refits a parameter. The individual U is a display sensitivity for individual observations; aggregate methods remain at their frozen score calibration. Since the calibration intercept is common across candidates it cancels in softmax, and a refitted global aggregate depends on the ratio w/T rather than w and T separately.</footer>
 </main>
 <div id="tooltip" class="tooltip"></div>
 <script id="report-data" type="application/json">__DATA__</script>
@@ -446,7 +473,8 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
     split: "test",
     metric: "LID",
     objective: "nll",
-    rowHeight: 17,
+    rowHeight: 15,
+    showAdvanced: false,
     individualTemperature: 1,
     globalTemperature: data.aggregation.global_fits.nll,
     countTemperature: data.aggregation.count_fit.temperature,
@@ -454,6 +482,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
     similarityTemperature: data.aggregation.similarity_fit.temperature,
     similarityRho: data.aggregation.similarity_fit.rho,
   };
+  const advancedMethods = new Set(["count_adjusted_dynamic", "similarity_adjusted_dynamic"]);
   const visible = new Set(Object.keys(data.method_styles));
   let individualCache = null;
 
@@ -604,7 +633,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
       row.forEach((frequency, binIndex) => {
         const left = x(edges[binIndex]), right = x(edges[binIndex + 1]);
         const rect = node("rect", {x:left, y:margin.top + rowIndex * rowHeight, width:Math.max(0.4,right-left), height:rowHeight, fill:viridis(frequency/maxFrequency)});
-        rect.addEventListener("mousemove", event => showTooltip(event, [`Speaker ${split.speakers[rowIndex]}`, `${split.trial_counts[rowIndex]} trials`, `Relative frequency ${format(frequency,3)}`, `Individual T ${format(state.individualTemperature,3)}`]));
+        rect.addEventListener("mousemove", event => showTooltip(event, [`Speaker ${split.speakers[rowIndex]}`, `${split.trial_counts[rowIndex]} trials`, `Relative frequency ${format(frequency,3)}`, `Individual U ${format(state.individualTemperature,3)}`]));
         rect.addEventListener("mouseleave", hideTooltip); svg.append(rect);
       });
       svg.append(node("line", {x1:margin.left, y1:margin.top+(rowIndex+1)*rowHeight, x2:margin.left+plotWidth, y2:margin.top+(rowIndex+1)*rowHeight, stroke:"rgba(255,255,255,0.20)", "stroke-width":1}));
@@ -617,7 +646,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
       svg.append(node("line", {x1:tx, y1:margin.top+plotHeight, x2:tx, y2:margin.top+plotHeight+6, stroke:"#26323d"}));
       svg.append(node("text", {x:tx, y:margin.top+plotHeight+22, "text-anchor":"middle", fill:"#46515c", "font-size":11}, state.metric === "LID" ? format(value,1) : format(value,2)));
     }
-    const entries = Object.keys(data.method_styles), offsetStep = Math.min(2.7, Math.max(1.2, rowHeight/8)), center = (entries.length - 1) / 2;
+    const entries = Object.keys(data.method_styles).filter(method => state.showAdvanced || !advancedMethods.has(method)), offsetStep = Math.min(2.7, Math.max(1.2, rowHeight/8)), center = (entries.length - 1) / 2;
     entries.forEach((method, methodIndex) => {
       if (!visible.has(method)) return;
       const style = data.method_styles[method], values = series[method][state.metric];
@@ -648,7 +677,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
     };
   }
   function parameterText(method) {
-    if (method === "direct_mean") return `Individual T = ${format(state.individualTemperature,3)}`;
+    if (method === "direct_mean") return `Individual U = ${format(state.individualTemperature,3)}`;
     if (method === "sum_llr") return "T = 1 (frozen)";
     if (method === "average_llr") return "T = k (frozen)";
     if (method === "temperature_scaled_brier") return `T = ${format(data.aggregation.global_fits.brier,3)}`;
@@ -659,6 +688,7 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
   function updateMetricTable(series) {
     const body = document.getElementById("metric-rows"); body.replaceChildren();
     Object.keys(data.method_styles).forEach(method => {
+      if (!state.showAdvanced && advancedMethods.has(method)) return;
       const style = data.method_styles[method], metrics = methodMetrics(series[method]);
       const row = document.createElement("tr"), name = document.createElement("td"), wrapper = document.createElement("span"), swatch = document.createElement("span");
       wrapper.className="method-name"; swatch.className="swatch"; swatch.style.background=style.color;
@@ -684,27 +714,45 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
     const x=index=>margin.left+index/nBins*plotWidth,xValue=value=>margin.left+(value-domain[0])/(domain[1]-domain[0])*plotWidth,y=value=>margin.top+(maximum-value)/maximum*plotHeight,binWidth=plotWidth/nBins;
     before.forEach((value,index)=>chart.append(node("rect",{x:x(index),y:y(value),width:Math.max(1,binWidth-.5),height:margin.top+plotHeight-y(value),fill:"#9ca3af",opacity:.42})));
     aggregated.forEach((value,index)=>chart.append(node("rect",{x:x(index)+binWidth*.19,y:y(value),width:Math.max(1,binWidth*.62),height:margin.top+plotHeight-y(value),fill:color,opacity:.70})));
+    const beforeMean=beforeValues.reduce((sum,value)=>sum+value,0)/beforeValues.length,afterMean=after[state.metric].reduce((sum,value)=>sum+value,0)/after[state.metric].length;
+    const clampedX=value=>xValue(Math.max(domain[0],Math.min(domain[1],value)));
+    chart.append(node("line",{x1:clampedX(beforeMean),y1:margin.top,x2:clampedX(beforeMean),y2:margin.top+plotHeight,stroke:"#4b5563","stroke-width":2.1}));
+    chart.append(node("line",{x1:clampedX(afterMean),y1:margin.top,x2:clampedX(afterMean),y2:margin.top+plotHeight,stroke:color,"stroke-width":2.4}));
     const baseline=state.metric==="LID"?0:1/split.n_enrolments,baselineX=xValue(baseline);
     if(baselineX>=margin.left&&baselineX<=width-margin.right) chart.append(node("line",{x1:baselineX,y1:margin.top,x2:baselineX,y2:margin.top+plotHeight,stroke:"#ef4444","stroke-width":1.6,"stroke-dasharray":"5 4"}));
     chart.append(node("line",{x1:margin.left,y1:margin.top+plotHeight,x2:width-margin.right,y2:margin.top+plotHeight,stroke:"#64707b"}));
     [0,.5,1].forEach(value=>{const ty=y(value);chart.append(node("text",{x:margin.left-6,y:ty+3,"text-anchor":"end",fill:"#5f6b76","font-size":8},`${format(100*value,0)}%`));});
     for(let tick=0;tick<=4;tick+=1){const value=domain[0]+tick/4*(domain[1]-domain[0]),tx=margin.left+tick/4*plotWidth;chart.append(node("text",{x:tx,y:height-17,"text-anchor":"middle",fill:"#5f6b76","font-size":9},state.metric==="LID"?format(value,1):format(value,2)));}
     chart.append(node("text",{x:width/2,y:height-2,"text-anchor":"middle",fill:"#17202a","font-size":10},state.metric==="LID"?"LID (bits)":"Target probability"));
+    return {beforeMean,afterMean};
   }
-  function setPanelMetrics(prefix, values) {
+  function setControlMetrics(prefix, values) {
     const metrics=methodMetrics(values);
-    document.getElementById(`${prefix}-alid`).textContent=`${format(metrics.alid,3)} bits`;
-    document.getElementById(`${prefix}-pdr`).textContent=`${format(100*metrics.pdr,1)}%`;
-    document.getElementById(`${prefix}-maximum`).textContent=`${format(metrics.maximum,3)} bits`;
+    document.getElementById(`${prefix}-control-alid`).textContent=`${format(metrics.alid,3)} bits`;
+    document.getElementById(`${prefix}-control-pdr`).textContent=`${format(100*metrics.pdr,1)}%`;
+    document.getElementById(`${prefix}-control-maximum`).textContent=`${format(metrics.maximum,3)} bits`;
+  }
+  function meanCaption(result, beforeCount, afterCount) {
+    const suffix=state.metric==="LID"?" bits":"";
+    return `Mean before: ${format(result.beforeMean,3)}${suffix} (${beforeCount} trials) | after: ${format(result.afterMean,3)}${suffix} (${afterCount} speakers)`;
   }
   function drawHistograms(series, individual) {
-    drawHistogram("global-histogram",individual.all[state.metric],series.global_temperature,"#dc2626");
-    drawHistogram("count-histogram",individual.all[state.metric],series.count_adjusted_dynamic,"#0f766e");
-    drawHistogram("similarity-histogram",individual.all[state.metric],series.similarity_adjusted_dynamic,"#7e22ce");
-    document.getElementById("global-histogram-caption").textContent=`aggregate T=${format(state.globalTemperature,3)} | individual T=${format(state.individualTemperature,3)}`;
-    document.getElementById("count-histogram-caption").textContent=`T=${format(state.countTemperature,3)}, rho=${format(state.countRho,3)} | individual T=${format(state.individualTemperature,3)}`;
-    document.getElementById("similarity-histogram-caption").textContent=`T=${format(state.similarityTemperature,3)}, rho=${format(state.similarityRho,3)} | individual T=${format(state.individualTemperature,3)}`;
-    setPanelMetrics("global",series.global_temperature);setPanelMetrics("count",series.count_adjusted_dynamic);setPanelMetrics("similarity",series.similarity_adjusted_dynamic);
+    const split=splitData(),before=individual.all[state.metric];
+    const globalMeans=drawHistogram("global-histogram",before,series.global_temperature,"#dc2626");
+    const countMeans=drawHistogram("count-histogram",before,series.count_adjusted_dynamic,"#0f766e");
+    const similarityMeans=drawHistogram("similarity-histogram",before,series.similarity_adjusted_dynamic,"#7e22ce");
+    document.getElementById("global-histogram-caption").textContent=`aggregate T=${format(state.globalTemperature,3)} | individual U=${format(state.individualTemperature,3)}`;
+    document.getElementById("count-histogram-caption").textContent=`T=${format(state.countTemperature,3)}, rho=${format(state.countRho,3)} | individual U=${format(state.individualTemperature,3)}`;
+    document.getElementById("similarity-histogram-caption").textContent=`T=${format(state.similarityTemperature,3)}, rho=${format(state.similarityRho,3)} | individual U=${format(state.individualTemperature,3)}`;
+    document.getElementById("global-histogram-means").textContent=meanCaption(globalMeans,before.length,split.speakers.length);
+    document.getElementById("count-histogram-means").textContent=meanCaption(countMeans,before.length,split.speakers.length);
+    document.getElementById("similarity-histogram-means").textContent=meanCaption(similarityMeans,before.length,split.speakers.length);
+  }
+  function updateControlMetrics(series) {
+    setControlMetrics("individual",series.direct_mean);
+    setControlMetrics("global",series.global_temperature);
+    setControlMetrics("count",series.count_adjusted_dynamic);
+    setControlMetrics("similarity",series.similarity_adjusted_dynamic);
   }
   function selectedIndices(length, maximum) {
     if(length<=maximum)return Array.from({length},(_,index)=>index);
@@ -742,28 +790,44 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
     const split=splitData();
     drawCandidateMatrix("individual-matrix",split.raw_logits,state.individualTemperature,"trial");
     drawCandidateMatrix("global-matrix",split.sum_logits,state.globalTemperature,"speaker");
-    document.getElementById("individual-matrix-caption").textContent=`${state.split} | ${split.raw_logits.length} trials | display T=${format(state.individualTemperature,3)}`;
+    document.getElementById("individual-matrix-caption").textContent=`${state.split} | ${split.raw_logits.length} trials | display U=${format(state.individualTemperature,3)}`;
     document.getElementById("global-matrix-caption").textContent=`${state.split} | ${split.speakers.length} speakers | global T=${format(state.globalTemperature,3)}`;
   }
   function drawObjective() {
     const chart=document.getElementById("objective");chart.replaceChildren();
+    const equation=document.getElementById("objective-equation"),explanation=document.getElementById("objective-explanation");
+    if(state.objective==="nll"){
+      equation.innerHTML="<code>S_s = sum_i LLR_si; q_sj(T) = softmax(S_s / T)_j; NLL_dev(T) = -(1/M) sum_s log q_s,true(T)</code><br>There are M terms: exactly one summed outcome for each development speaker.";
+      explanation.innerHTML="<strong>NLL</strong> is the mean surprise of the true candidate. Every nonmated logit still matters because it appears in the softmax denominator of <code>q_s,true</code>. The plotted minimum selects <code>T</code>; its vertical value is the achieved loss.";
+    }else{
+      equation.innerHTML="<code>S_s = sum_i LLR_si; q_sj(T) = softmax(S_s / T)_j; Brier_dev(T) = (1/M) sum_s sum_j (q_sj(T) - y_sj)^2</code><br>There is one probability vector for each development speaker, with every candidate scored.";
+      explanation.innerHTML="<strong>Brier</strong> sums squared probability error over all enrolment candidates. The plotted minimum selects a different fitted divisor when the two proper scoring rules prefer different confidence scales.";
+    }
     const width=560,height=250,margin={left:55,right:18,top:12,bottom:40};chart.setAttribute("viewBox",`0 0 ${width} ${height}`);
     const temperatures=data.temperature_sweep.temperature,losses=data.temperature_sweep[state.objective],logMin=Math.log(temperatures[0]),logMax=Math.log(temperatures.at(-1)),lossMin=Math.min(...losses),lossMax=Math.max(...losses),paddedMin=lossMin-.04*(lossMax-lossMin||1),paddedMax=lossMax+.04*(lossMax-lossMin||1),x=value=>margin.left+(Math.log(value)-logMin)/(logMax-logMin)*(width-margin.left-margin.right),y=value=>margin.top+(paddedMax-value)/(paddedMax-paddedMin)*(height-margin.top-margin.bottom);
     chart.append(node("line",{x1:margin.left,y1:height-margin.bottom,x2:width-margin.right,y2:height-margin.bottom,stroke:"#64707b"}));chart.append(node("line",{x1:margin.left,y1:margin.top,x2:margin.left,y2:height-margin.bottom,stroke:"#64707b"}));chart.append(node("polyline",{points:temperatures.map((value,index)=>`${x(value)},${y(losses[index])}`).join(" "),fill:"none",stroke:state.objective==="nll"?"#0f766e":"#db2777","stroke-width":2.3}));
     const fitted=state.objective==="nll"?data.aggregation.global_fits.nll:data.aggregation.global_fits.brier;chart.append(node("line",{x1:x(fitted),y1:margin.top,x2:x(fitted),y2:height-margin.bottom,stroke:"#17202a","stroke-width":1.5,"stroke-dasharray":"4 4"}));chart.append(node("line",{x1:x(state.globalTemperature),y1:margin.top,x2:x(state.globalTemperature),y2:height-margin.bottom,stroke:"#dc2626","stroke-width":2}));[temperatures[0],fitted,temperatures.at(-1)].forEach(value=>chart.append(node("text",{x:x(value),y:height-15,"text-anchor":"middle",fill:"#5f6b76","font-size":9},format(value,value<1?2:1))));chart.append(node("text",{x:width/2,y:height-1,"text-anchor":"middle",fill:"#17202a","font-size":10},"Temperature T (log scale)"));chart.append(node("text",{x:12,y:height/2,transform:`rotate(-90 12 ${height/2})`,"text-anchor":"middle",fill:"#17202a","font-size":10},state.objective==="nll"?"Development NLL":"Development Brier"));chart.append(node("text",{x:margin.left-7,y:y(lossMin)+3,"text-anchor":"end",fill:"#5f6b76","font-size":9},format(lossMin,3)));
   }
   function updateEffectiveRanges(series) {
-    const split=splitData(),count=series.count_adjusted_dynamic.temperatures,similarity=series.similarity_adjusted_dynamic.temperatures,effectiveWeight=data.individual_calibration.original_weight_w/state.individualTemperature;
-    document.getElementById("individual-effective").textContent=`effective w ${format(effectiveWeight,3)}`;
-    document.getElementById("count-effective").textContent=`effective T ${format(Math.min(...count),2)}-${format(Math.max(...count),2)}`;
-    document.getElementById("similarity-effective").textContent=`effective T ${format(Math.min(...similarity),2)}-${format(Math.max(...similarity),2)}`;
+    const split=splitData(),count=series.count_adjusted_dynamic.temperatures,similarity=series.similarity_adjusted_dynamic.temperatures,originalWeight=Number(data.individual_calibration.original_weight_w),individualWeight=originalWeight/state.individualTemperature,globalWeight=originalWeight/state.globalTemperature;
+    const countWeights=count.map(value=>originalWeight/value),similarityWeights=similarity.map(value=>originalWeight/value);
+    document.getElementById("individual-effective").textContent=`current effective score weight w0/U = ${format(individualWeight,3)}`;
+    document.getElementById("global-effective").textContent=`current w0/T = ${format(globalWeight,3)} | NLL-fit loss ${format(globalNllSummary.full_development_metrics.multiclass_nll_nats,3)} | Brier-fit loss ${format(globalBrierSummary.full_development_metrics.multiclass_brier,3)}`;
+    document.getElementById("count-effective").textContent=`T_eff ${format(Math.min(...count),2)}-${format(Math.max(...count),2)} | w_eff ${format(Math.min(...countWeights),3)}-${format(Math.max(...countWeights),3)}`;
+    document.getElementById("similarity-effective").textContent=`T_eff ${format(Math.min(...similarity),2)}-${format(Math.max(...similarity),2)} | w_eff ${format(Math.min(...similarityWeights),3)}-${format(Math.max(...similarityWeights),3)}`;
+    document.getElementById("scale-connection").innerHTML=`Original development calibration <code>LLR = w0 z + b</code> has <code>w0=${format(originalWeight,3)}</code>. Current one-trial scale: <code>w0/U=${format(individualWeight,3)}</code>. Current summed-speaker scale: <code>w0/T=${format(globalWeight,3)}</code>. The common intercept <code>b</code> cancels in each candidate softmax.`;
     document.getElementById("displayed-split").textContent=`Displayed data: ${state.split}`;
     document.getElementById("metric-scope").textContent=`Current controls on ${state.split} speakers; no fitting occurs in this view.`;
+  }
+  function applyAdvancedVisibility() {
+    document.getElementById("parameter-grid").classList.toggle("show-advanced",state.showAdvanced);
+    document.getElementById("histogram-grid").classList.toggle("show-advanced",state.showAdvanced);
+    document.querySelectorAll(".advanced-control,.advanced-panel,.advanced-method-toggle").forEach(element=>{element.hidden=!state.showAdvanced;});
   }
   function update() {
     individualCache=null;
     const individual=individualValues(),series=currentSeries(individual);
-    updateEffectiveRanges(series);updateMetricTable(series);drawHeatmap(series,individual);drawHistograms(series,individual);drawCandidateMatrices();drawObjective();
+    updateEffectiveRanges(series);updateControlMetrics(series);updateMetricTable(series);drawHeatmap(series,individual);drawHistograms(series,individual);drawCandidateMatrices();drawObjective();
   }
   function syncTemperature(prefix,value) {
     const clamped=Math.max(tMin,Math.min(tMax,Number(value)));
@@ -785,10 +849,11 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
     document.getElementById(`${prefix}-rho`).addEventListener("input",event=>{state[stateKey]=syncRho(prefix,Number(event.target.value)/1000);update();});
     document.getElementById(`${prefix}-rho-number`).addEventListener("change",event=>{state[stateKey]=syncRho(prefix,event.target.value);update();});
   }
-  Object.entries(data.method_styles).forEach(([method,style])=>{const label=document.createElement("label"),checkbox=document.createElement("input"),swatch=document.createElement("span");label.className="method-toggle";checkbox.type="checkbox";checkbox.checked=true;checkbox.addEventListener("change",()=>{checkbox.checked?visible.add(method):visible.delete(method);update();});swatch.className="swatch";swatch.style.background=style.color;label.append(checkbox,swatch,document.createTextNode(style.label));document.getElementById("method-bar").append(label);});
+  Object.entries(data.method_styles).forEach(([method,style])=>{const label=document.createElement("label"),checkbox=document.createElement("input"),swatch=document.createElement("span");label.className=`method-toggle${advancedMethods.has(method)?" advanced-method-toggle":""}`;label.hidden=advancedMethods.has(method);checkbox.type="checkbox";checkbox.checked=true;checkbox.addEventListener("change",()=>{checkbox.checked?visible.add(method):visible.delete(method);update();});swatch.className="swatch";swatch.style.background=style.color;label.append(checkbox,swatch,document.createTextNode(style.label));document.getElementById("method-bar").append(label);});
   document.querySelectorAll("[data-metric]").forEach(button=>button.addEventListener("click",()=>{state.metric=button.dataset.metric;document.querySelectorAll("[data-metric]").forEach(item=>item.classList.toggle("active",item===button));update();}));
   document.querySelectorAll("[data-split]").forEach(button=>button.addEventListener("click",()=>{state.split=button.dataset.split;document.querySelectorAll("[data-split]").forEach(item=>item.classList.toggle("active",item===button));update();}));
   document.querySelectorAll("[data-objective]").forEach(button=>button.addEventListener("click",()=>{state.objective=button.dataset.objective;document.querySelectorAll("[data-objective]").forEach(item=>item.classList.toggle("active",item===button));drawObjective();}));
+  document.getElementById("show-advanced").addEventListener("change",event=>{state.showAdvanced=event.target.checked;applyAdvancedVisibility();update();});
   document.getElementById("density-slider").addEventListener("input",event=>{state.rowHeight=Number(event.target.value);document.getElementById("density-value").textContent=`${state.rowHeight} px`;const individual=individualValues();drawHeatmap(currentSeries(individual),individual);});
   ["individual-matrix","global-matrix"].forEach(id=>{const canvas=document.getElementById(id);canvas.addEventListener("mousemove",matrixTooltip);canvas.addEventListener("mouseleave",hideTooltip);});
   bindTemperature("individual","individualTemperature");bindTemperature("global","globalTemperature");bindTemperature("count","countTemperature");bindTemperature("similarity","similarityTemperature");bindRho("count","countRho");bindRho("similarity","similarityRho");
@@ -800,8 +865,10 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 10px
   document.getElementById("similarity-use-fit").addEventListener("click",()=>{state.similarityTemperature=syncTemperature("similarity",data.aggregation.similarity_fit.temperature);state.similarityRho=syncRho("similarity",data.aggregation.similarity_fit.rho);update();});
   const diagnostics=document.getElementById("diagnostic-rows");
   Object.values(data.calibration.methods).forEach(summary=>{const tr=document.createElement("tr"),loo=summary.leave_one_speaker_out_metrics||{},parameters=Object.entries(summary.fitted_parameters).map(([name,value])=>`${name}=${format(value,4)}`).join(", ")||"fixed",stability=summary.leave_one_speaker_out_parameter_stability,range=stability?Object.entries(stability).map(([name,values])=>`${name} ${format(values.minimum,3)}-${format(values.maximum,3)}`).join(", "):"fixed";[summary.label,summary.fit_objective?summary.fit_objective.replace("multiclass_",""):"fixed",parameters,range,format(summary.full_development_metrics.multiclass_nll_nats,4),format(loo.multiclass_nll_nats,4),format(summary.full_development_metrics.multiclass_brier,4),format(loo.multiclass_brier,4)].forEach(value=>{const td=document.createElement("td");td.textContent=value;tr.append(td);});diagnostics.append(tr);});
-  document.getElementById("global-fit-values").textContent=`NLL ${format(data.aggregation.global_fits.nll,2)} | Brier ${format(data.aggregation.global_fits.brier,2)}`;
-  state.individualTemperature=syncTemperature("individual",state.individualTemperature);state.globalTemperature=syncTemperature("global",state.globalTemperature);state.countTemperature=syncTemperature("count",state.countTemperature);state.countRho=syncRho("count",state.countRho);state.similarityTemperature=syncTemperature("similarity",state.similarityTemperature);state.similarityRho=syncRho("similarity",state.similarityRho);update();
+  const globalNllSummary=data.calibration.methods.temperature_scaled,globalBrierSummary=data.calibration.methods.temperature_scaled_brier;
+  document.getElementById("individual-fit-values").textContent=`NLL-fit U = ${format(data.individual_calibration.temperature,3)} | loss ${format(data.individual_calibration.fitted_nll_nats,3)}`;
+  document.getElementById("global-fit-values").textContent=`NLL-fit T = ${format(data.aggregation.global_fits.nll,2)} | Brier-fit T = ${format(data.aggregation.global_fits.brier,2)}`;
+  state.individualTemperature=syncTemperature("individual",state.individualTemperature);state.globalTemperature=syncTemperature("global",state.globalTemperature);state.countTemperature=syncTemperature("count",state.countTemperature);state.countRho=syncRho("count",state.countRho);state.similarityTemperature=syncTemperature("similarity",state.similarityTemperature);state.similarityRho=syncRho("similarity",state.similarityRho);applyAdvancedVisibility();update();
 })();
 </script>
 </body>
