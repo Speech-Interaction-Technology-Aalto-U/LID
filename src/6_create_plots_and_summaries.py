@@ -56,6 +56,8 @@ def configure_matplotlib():
             "legend.fontsize": 7.5,
             "figure.figsize": (3.5, 2.5),
             "figure.dpi": 300,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
         }
     )
 
@@ -90,7 +92,7 @@ def plot_metric(
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("Relative Frequency")
+    ax.set_ylabel("Proportion of trials")
     ax.set_ylim(bottom=0)
 
     if baseline_val is not None:
@@ -153,8 +155,8 @@ def plot_probability_distribution(experiment_dir, df_lid, out_dir):
     return plot_metric(
         df_lid,
         column="p",
-        title=f"Target Recognition Probability Distribution ({experiment_dir.name})",
-        xlabel="Probability",
+        title=f"Attacker Confidence Distribution ({experiment_dir.name})",
+        xlabel=r"Probability assigned to true identity, $p_{i,m_i}$",
         out_dir=out_dir,
         filename_base="probability_distribution",
         baseline_val=1.0 / n_enrolments,
@@ -166,8 +168,8 @@ def plot_lid_distribution(experiment_dir, df_lid, out_dir):
     return plot_metric(
         df_lid,
         column="LID",
-        title=f"Local Information Disclosure Distribution ({experiment_dir.name})",
-        xlabel="Local Information Disclosure (bits)",
+        title=f"LID Distribution ({experiment_dir.name})",
+        xlabel=r"Local information disclosure, $\mathrm{LID}_i$ (bits)",
         out_dir=out_dir,
         filename_base="lid_distribution",
         baseline_val=0.0,
@@ -225,9 +227,10 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
         pos_ratio = float(np.mean(valid_scores > 0))
         color, linestyle = experiment_plot_style(experiment_name)
 
-        ax.plot(
+        ax.step(
             sorted_scores,
             y_vals,
+            where="post",  # A step function accurately represents the empirical CCDF.
             linewidth=1.5,
             label=f"{experiment_name} (Avg: {avg:.2f}, Max: {mx:.2f}, Pos: {pos_ratio:.1%})",
             color=color,
@@ -241,9 +244,9 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
     #     linewidth=1.5,
     #     label="No information disclosure",
     # )
-    ax.set_title("Combined Local Information Disclosure CCDF")
-    ax.set_xlabel("Local Information Disclosure (bits)")
-    ax.set_ylabel("Trials Exceeding Disclosure Level (%)")
+    ax.set_title("Local Information Disclosure Across Systems")
+    ax.set_xlabel(r"Local information disclosure, $\mathrm{LID}_i$ (bits)")
+    ax.set_ylabel("Trials exceeding disclosure level (%)")
     ax.set_ylim([0.0, 100.0])
     ax.legend(
         loc="lower left",
@@ -443,16 +446,16 @@ def plot_summary_visuals(df_summary, out_dir):
 
     type_handles = [
         mlines.Line2D(
-            [], [], color="gray", marker="x", linestyle="None", markersize=5, label="LID_max"
+            [], [], color="gray", marker="x", linestyle="None", markersize=5, label=r"$\mathrm{LID}_{\max}$"
         ),
         mlines.Line2D(
-            [], [], color="gray", marker="^", linestyle="None", markersize=5, label="LID+"
+            [], [], color="gray", marker="^", linestyle="None", markersize=5, label=r"$\mathrm{LID}^{+}$"
         ),
         mlines.Line2D(
-            [], [], color="gray", marker="o", linestyle="None", markersize=5, label="ALID"
+            [], [], color="gray", marker="o", linestyle="None", markersize=5, label=r"$\mathrm{ALID}$"
         ),
         mlines.Line2D(
-            [], [], color="gray", marker="v", linestyle="None", markersize=5, label="LID-"
+            [], [], color="gray", marker="v", linestyle="None", markersize=5, label=r"$\mathrm{LID}^{-}$"
         ),
     ]
 
