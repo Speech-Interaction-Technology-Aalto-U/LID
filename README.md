@@ -196,8 +196,38 @@ Run the deterministic longitudinal tests with:
 ```bash
 uv run python -m unittest \
   tests/test_long_leakage.py \
-  tests/test_longitudinal_calibration.py
+  tests/test_longitudinal_calibration.py \
+  tests/test_longitudinal_convergence.py
 ```
+
+### LID convergence over the number of combined trials
+
+To inspect how LID evolves as more evidence from the same speaker is combined,
+run the combination-convergence analysis:
+
+```bash
+uv run src/long_leakage/run_combination_convergence.py \
+  --experiments B3 B4 B5
+```
+
+For each `k`, this evaluates unique unordered subsets of `k` trials belonging
+to the same speaker. A speaker contributes only when they have at least `k`
+trials; otherwise that speaker is skipped for that `k`. It plots the LID mean
+and central 95% interval in four separate panels, all evaluated on exactly the
+same subsets:
+
+* summed LLR evidence with `T = 1`;
+* averaged LLR evidence with `T = k`;
+* summed LLR evidence with the development NLL-fit global temperature; and
+* summed LLR evidence with the development Brier-fit global temperature.
+
+Subset populations with at most 50,000 members are exhaustive by default;
+larger populations use a reproducible uniform sample without replacement.
+The exact population size, evaluated sample size, variance, central 95% range,
+and 95% confidence interval for each sampled mean are recorded in
+`results/long/combination_convergence/<experiment>/lid_combination_convergence.csv`.
+The adjacent `metadata.json` records the formulas, temperature source, and
+sampling method needed to interpret the figure.
 
 ## Pipeline Architecture
 
