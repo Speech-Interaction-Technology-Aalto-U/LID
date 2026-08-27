@@ -16,8 +16,13 @@ Outputs:
     results/experiments/<experiment>/plots/*.png and *.pdf
     results/summary/summary_table.csv
     results/summary/calibration_coeff.csv
+    results/summary/Table3.csv and Table4.csv
     results/summary/lid_combined_ccdf.png and .pdf
     results/summary/eer_vs_infodisc_scatter.png and .pdf, when EER is available
+    results/readme_figures/Figure2.png, Figure3.png, and Figure4.png
+    results/paper_figures/Figure2.pdf through Figure5.pdf, without plot titles
+    results/paper_figures/Figure4_no_legend.pdf and Figure5_no_legend.pdf
+    results/paper_figures/Table3.tex and Table4.tex
 """
 
 import json
@@ -43,6 +48,93 @@ METRICS_FILE = "results.json"
 ALTERNATIVE_METRICS_DIR_NAME = "alternative_metrics"
 SUMMARY_DIR = PROJECT_ROOT / "results" / "summary"
 PAPER_FIGURES_DIR = PROJECT_ROOT / "results" / "paper_figures"
+README_FIGURES_DIR = PROJECT_ROOT / "results" / "readme_figures"
+# MeanD is not computed by this pipeline. It is sourced from previous research (Evaluating voice anonymisation using similarity rank disclosure by Chandra et al.)
+MEAND_BY_EXPERIMENT = {
+    "B3": 0.06,
+    "B4": 0.02,
+    "B5": 0.02,
+    "T8-5": 0.06,
+    "T10-2": 0.52,
+    "T12-5": 0.02,
+    "T25-1": 0.05,
+    "plain": 2.19,
+    "random": 0.00,
+}
+PAPER_SYSTEM_ORDER = [
+    "B3",
+    "B4",
+    "B5",
+    "T8-5",
+    "T10-2",
+    "T12-5",
+    "T25-1",
+]
+BASELINE_EXPERIMENT_ORDER = ["plain", "random"]
+
+TABLE4_COLUMN_CONFIG = {
+    "EER": {
+        "header": r"\textbf{EER} ($\uparrow$)",
+        "unit": "",
+        "decimals": 2,
+        "direction": "max",
+    },
+    "Cllr": {
+        "header": r"$\mathbf{C}_{\text{llr}}$ ($\uparrow$)",
+        "unit": "",
+        "decimals": 2,
+        "direction": "max",
+    },
+    "MeanD": {
+        "header": r"\textbf{MeanD} ($\downarrow$)",
+        "unit": r"\textbf{(bits)}",
+        "decimals": 2,
+        "direction": "min",
+    },
+    "ALID": {
+        "header": r"\textbf{ALID} ($\downarrow$)",
+        "unit": r"\textbf{(bits)}",
+        "decimals": 2,
+        "direction": "min",
+    },
+    "PDR": {
+        "header": r"\textbf{PDR} ($\downarrow$)",
+        "unit": r"\textbf{(\%)}",
+        "decimals": 0,
+        "direction": "min",
+    },
+    "NDR": {
+        "header": r"\textbf{NDR} ($\uparrow$)",
+        "unit": r"\textbf{(\%)}",
+        "decimals": 0,
+        "direction": "max",
+    },
+    "LID+": {
+        "header": r"$\mathbf{LID}^{+}$ ($\downarrow$)",
+        "unit": r"\textbf{(bits)}",
+        "decimals": 2,
+        "direction": "min",
+    },
+    "LID-": {
+        "header": r"$\mathbf{LID}^{-}$ ($\downarrow$)",
+        "unit": r"\textbf{(bits)}",
+        "decimals": 2,
+        "direction": "min",
+    },
+    "LID_max": {
+        "header": r"$\mathbf{LID}_{\text{max}}$ ($\downarrow$)",
+        "unit": r"\textbf{(bits)}",
+        "decimals": 2,
+        "direction": "min",
+    },
+}
+LEGEND_STYLE = {
+    "frameon": True,
+    "framealpha": 0.9,
+    "borderaxespad": 0.2,
+    "borderpad": 0.4,
+    "labelspacing": 0.4,
+}
 
 
 def configure_matplotlib():
@@ -62,13 +154,11 @@ def configure_matplotlib():
     )
 
 
-def plot_metric(
+def create_metric_figure(
     df,
     column,
     title,
     xlabel,
-    out_dir,
-    filename_base,
     baseline_val=None,
     baseline_label=None,
     loc="upper right",
@@ -90,7 +180,8 @@ def plot_metric(
         color="black",
     )
 
-    ax.set_title(title)
+    if title:
+        ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Proportion of trials")
     ax.set_ylim(bottom=0)
@@ -103,20 +194,37 @@ def plot_metric(
             linewidth=1.5,
             label=baseline_label,
         )
-        ax.legend(
-            loc=loc,
-            framealpha=0.9,
-            borderaxespad=0.2,
-            borderpad=0.4,
-            labelspacing=0.4,
-        )
+        ax.legend(loc=loc, **LEGEND_STYLE)
 
     plt.tight_layout()
+    return fig
+
+
+def plot_metric(
+    df,
+    column,
+    title,
+    xlabel,
+    out_dir,
+    filename_base,
+    baseline_val=None,
+    baseline_label=None,
+    loc="upper right",
+):
+    fig = create_metric_figure(
+        df,
+        column,
+        title,
+        xlabel,
+        baseline_val=baseline_val,
+        baseline_label=baseline_label,
+        loc=loc,
+    )
 
     png_path = out_dir / f"{filename_base}.png"
     pdf_path = out_dir / f"{filename_base}.pdf"
-    plt.savefig(png_path, dpi=300, bbox_inches="tight")
-    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+    fig.savefig(png_path, dpi=300)
+    fig.savefig(pdf_path, format="pdf")
     plt.close(fig)
 
     return [png_path, pdf_path]
@@ -209,9 +317,11 @@ def experiment_plot_style(experiment_name):
     )
 
 
-def plot_combined_lid_ccdf(all_lid_data, out_dir):
-    out_dir.mkdir(parents=True, exist_ok=True)
-
+def create_combined_lid_ccdf_figure(
+    all_lid_data,
+    title="Local Information Disclosure Across Systems",
+    show_legend=True,
+):
     fig, ax = plt.subplots(figsize=(8.27, 4))
     ax.grid(True, which="both", ls="-", color="gray", alpha=0.2, zorder=0)
 
@@ -244,27 +354,44 @@ def plot_combined_lid_ccdf(all_lid_data, out_dir):
     #     linewidth=1.5,
     #     label="No information disclosure",
     # )
-    ax.set_title("Local Information Disclosure Across Systems")
+    if title:
+        ax.set_title(title)
     ax.set_xlabel(r"Local information disclosure, $\mathrm{LID}_i$ (bits)")
     ax.set_ylabel("Trials exceeding disclosure level (%)")
     ax.set_ylim([0.0, 100.0])
-    ax.legend(
-        loc="lower left",
-        framealpha=0.9,
-        borderaxespad=0.2,
-        borderpad=0.4,
-        labelspacing=0.4,
-    )
+    experiment_legend = None
+    if show_legend:
+        experiment_legend = ax.legend(
+            loc="lower left",
+            framealpha=0.9,
+            borderaxespad=0.2,
+            borderpad=0.4,
+            labelspacing=0.4,
+        )
 
     plt.tight_layout()
+    return fig, experiment_legend
+
+
+def plot_combined_lid_ccdf(all_lid_data, out_dir):
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, experiment_legend = create_combined_lid_ccdf_figure(all_lid_data)
 
     png_path = out_dir / "lid_combined_ccdf.png"
     pdf_path = out_dir / "lid_combined_ccdf.pdf"
     plt.savefig(png_path, dpi=300, bbox_inches="tight")
     plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+
+    experiment_legend.remove()
+    no_legend_png_path = out_dir / "lid_combined_ccdf_no_legend.png"
+    no_legend_pdf_path = out_dir / "lid_combined_ccdf_no_legend.pdf"
+    plt.tight_layout()
+    plt.savefig(no_legend_png_path, dpi=300, bbox_inches="tight")
+    plt.savefig(no_legend_pdf_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
-    return [png_path, pdf_path]
+    return [png_path, pdf_path, no_legend_png_path, no_legend_pdf_path]
 
 
 def process_experiment(experiment_dir):
@@ -306,6 +433,9 @@ def build_summary_table(experiment_dirs, out_dir):
             "LID_max": float(metrics["LID_max"]),
         }
 
+        if experiment_dir.name in MEAND_BY_EXPERIMENT:
+            row["MeanD"] = MEAND_BY_EXPERIMENT[experiment_dir.name]
+
         if alt_metrics_path.is_file():
             alt_metrics = json.loads(alt_metrics_path.read_text())
             if "EER" in alt_metrics and alt_metrics["EER"] is not None:
@@ -316,7 +446,7 @@ def build_summary_table(experiment_dirs, out_dir):
         rows.append(row)
 
     df_summary = pd.DataFrame(rows)
-    optional_columns = ["EER", "Cllr"]
+    optional_columns = ["EER", "Cllr", "MeanD"]
     empty_optional_columns = [
         column
         for column in optional_columns
@@ -336,6 +466,7 @@ def build_summary_table(experiment_dirs, out_dir):
             "Experiment",
             "EER",
             "Cllr",
+            "MeanD",
             "ALID",
             "PDR",
             "NDR",
@@ -377,9 +508,10 @@ def build_calibration_coeff_table(experiment_dirs, out_dir):
             }
         )
 
+    df_calibration = pd.DataFrame(rows)
     calibration_path = out_dir / "calibration_coeff.csv"
-    pd.DataFrame(rows).to_csv(calibration_path, index=False)
-    return calibration_path
+    df_calibration.to_csv(calibration_path, index=False)
+    return df_calibration, calibration_path
 
 
 def plot_summary_visuals(df_summary, out_dir):
@@ -387,11 +519,6 @@ def plot_summary_visuals(df_summary, out_dir):
         return []
 
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        plt.style.use("seaborn-v0_8-whitegrid")
-    except OSError:
-        pass
 
     df_plot = df_summary[
         (df_summary["Experiment"] != "plain") & df_summary["EER"].notna()
@@ -401,7 +528,7 @@ def plot_summary_visuals(df_summary, out_dir):
 
     x_vals = df_plot["EER"]
 
-    fig, ax = plt.subplots(figsize=(5.4, 3.1))
+    fig, ax = plt.subplots()
 
     experiment_colors = {
         "B3": "tab:blue",
@@ -461,14 +588,9 @@ def plot_summary_visuals(df_summary, out_dir):
 
     metric_legend = ax.legend(
         handles=type_handles,
-        fontsize=7,
         loc="upper right",
-        bbox_to_anchor=(1.0, 1.0),
         title="Metric",
-        title_fontsize=7,
-        framealpha=1.0,
-        facecolor="white",
-        edgecolor="black",
+        **LEGEND_STYLE,
     )
     ax.add_artist(metric_legend)
 
@@ -485,24 +607,19 @@ def plot_summary_visuals(df_summary, out_dir):
         for experiment in df_plot["Experiment"]
     ]
 
-    ax.legend(
+    experiment_legend = ax.legend(
         handles=experiment_handles,
-        fontsize=7,
         loc="upper left",
         bbox_to_anchor=(1.02, 1.0),
         title="Experiment",
-        title_fontsize=7,
-        framealpha=1.0,
-        facecolor="white",
-        edgecolor="black",
-        borderaxespad=0.0,
+        **LEGEND_STYLE,
     )
 
     ax.axhline(0, color="gray", linestyle=":", linewidth=1, zorder=1, alpha=0.5)
-    ax.set_xlabel("Equal Error Rate (EER)", fontsize=9)
-    ax.set_ylabel("Information Disclosure (bits)", fontsize=9)
-    ax.grid(True, which="both", ls="-", alpha=0.2)
-    ax.tick_params(axis="both", which="major", labelsize=8)
+    ax.set_xlabel("Equal error rate (EER)")
+    ax.set_ylabel("Information disclosure (bits)")
+    ax.set_axisbelow(True)
+    ax.grid(True, which="both", color="0.85", linewidth=0.6, alpha=0.7)
 
     ax.set_xlim(max(0, x_vals.min() - 0.05), min(0.55, x_vals.max() + 0.05))
 
@@ -526,11 +643,23 @@ def plot_summary_visuals(df_summary, out_dir):
 
     scatter_png_path = out_dir / "eer_vs_infodisc_scatter.png"
     scatter_pdf_path = out_dir / "eer_vs_infodisc_scatter.pdf"
-    plt.savefig(scatter_png_path, dpi=300, bbox_inches="tight")
-    plt.savefig(scatter_pdf_path, format="pdf", bbox_inches="tight")
+    fig.savefig(scatter_png_path, dpi=300)
+    fig.savefig(scatter_pdf_path, format="pdf")
+
+    experiment_legend.remove()
+    no_legend_png_path = out_dir / "eer_vs_infodisc_scatter_no_legend.png"
+    no_legend_pdf_path = out_dir / "eer_vs_infodisc_scatter_no_legend.pdf"
+    plt.tight_layout()
+    fig.savefig(no_legend_png_path, dpi=300)
+    fig.savefig(no_legend_pdf_path, format="pdf")
     plt.close(fig)
 
-    return [scatter_png_path, scatter_pdf_path]
+    return [
+        scatter_png_path,
+        scatter_pdf_path,
+        no_legend_png_path,
+        no_legend_pdf_path,
+    ]
 
 
 def format_table_value(value):
@@ -566,64 +695,293 @@ def print_dataframe_table(df):
         )
 
 
-def copy_png_figure(source_path, figure_name, out_dir, required=True):
-    source = source_path.with_suffix(".png")
-    if not source.is_file():
+def copy_figure(source_path, figure_name, out_dir, required=True):
+    if not source_path.is_file():
         if required:
-            raise FileNotFoundError(f"Missing required figure source: {source}")
+            raise FileNotFoundError(f"Missing required figure source: {source_path}")
         return None
 
-    destination = out_dir / f"{figure_name}.png"
-    shutil.copy2(source, destination)
+    destination = out_dir / f"{figure_name}{source_path.suffix}"
+    shutil.copy2(source_path, destination)
     return destination
 
 
-def save_rounded_table(source_csv_path, table_name, out_dir):
-    if not source_csv_path.is_file():
-        raise FileNotFoundError(f"Missing required table source: {source_csv_path}")
+def paper_experiment_sort_key(experiment_name):
+    if experiment_name in PAPER_SYSTEM_ORDER:
+        return (0, PAPER_SYSTEM_ORDER.index(experiment_name), "")
+    if experiment_name in BASELINE_EXPERIMENT_ORDER:
+        return (2, BASELINE_EXPERIMENT_ORDER.index(experiment_name), "")
+    return (1, 0, experiment_name.lower())
 
-    destination = out_dir / f"{table_name}.csv"
-    df = pd.read_csv(source_csv_path)
-    numeric_columns = df.select_dtypes(include="number").columns
-    df[numeric_columns] = df[numeric_columns].mask(
-        df[numeric_columns].abs() < 0.005,
-        0.0,
+
+def order_paper_table_rows(df, experiment_column):
+    row_order = sorted(
+        range(len(df)),
+        key=lambda index: paper_experiment_sort_key(df.iloc[index][experiment_column]),
     )
-    df.round(2).to_csv(destination, index=False, float_format="%.2f")
+    return df.iloc[row_order].reset_index(drop=True)
+
+
+def prepare_table3_data(df_calibration):
+    df_table = df_calibration.rename(columns={"experiment": "Experiment"}).copy()
+    df_table = order_paper_table_rows(df_table, "Experiment")
+    return df_table[["Experiment", "w", "b"]]
+
+
+def prepare_table4_data(df_summary):
+    metric_columns = [
+        column for column in TABLE4_COLUMN_CONFIG if column in df_summary.columns
+    ]
+    df_table = df_summary[["Experiment", *metric_columns]].copy()
+    df_table = order_paper_table_rows(df_table, "Experiment")
+    for column in ["PDR", "NDR"]:
+        if column in df_table:
+            df_table[column] *= 100.0
+    return df_table
+
+
+def normalized_table_value(value, decimals):
+    if pd.isna(value):
+        return np.nan
+    rounded_value = round(float(value), decimals)
+    if rounded_value == 0:
+        return 0.0
+    return rounded_value
+
+
+def format_table_number(value, column):
+    if pd.isna(value):
+        return ""
+    decimals = TABLE4_COLUMN_CONFIG[column]["decimals"]
+    normalized_value = normalized_table_value(value, decimals)
+    if column in {"PDR", "NDR"}:
+        return f"{normalized_value:.1f}"
+    return f"{normalized_value:.2f}"
+
+
+def write_table3_csv(df_table, destination):
+    df_csv = df_table.copy()
+    for column in ["w", "b"]:
+        df_csv[column] = df_csv[column].map(
+            lambda value: f"{normalized_table_value(value, 2):.2f}"
+        )
+    df_csv.to_csv(destination, index=False)
     return destination
 
 
-def export_paper_figures():
+def write_table4_csv(df_table, destination):
+    df_csv = df_table.copy()
+    for column in df_csv.columns[1:]:
+        df_csv[column] = df_csv[column].map(
+            lambda value, metric=column: format_table_number(value, metric)
+        )
+    df_csv.to_csv(destination, index=False)
+    return destination
+
+
+def latex_escape(value):
+    replacements = {
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+    }
+    return "".join(replacements.get(character, character) for character in str(value))
+
+
+def latex_row(values):
+    return " & ".join(values) + r" \\"
+
+
+def write_table3_latex(df_table, destination):
+    lines = [
+        r"\begin{tabular}{lrr}",
+        r"\toprule",
+        latex_row([r"\textbf{Experiment}", r"$\mathbf{w}$", r"$\mathbf{b}$"]),
+        r"\midrule",
+    ]
+    baseline_started = False
+    for _, row in df_table.iterrows():
+        is_baseline = row["Experiment"] in BASELINE_EXPERIMENT_ORDER
+        if is_baseline and not baseline_started:
+            lines.append(r"\midrule")
+            baseline_started = True
+        lines.append(
+            latex_row(
+                [
+                    latex_escape(row["Experiment"]),
+                    f"{normalized_table_value(row['w'], 2):.2f}",
+                    f"{normalized_table_value(row['b'], 2):.2f}",
+                ]
+            )
+        )
+    lines.extend([r"\bottomrule", r"\end{tabular}"])
+    destination.write_text("\n".join(lines) + "\n")
+    return destination
+
+
+def table4_best_values(df_table):
+    experiment_rows = df_table[
+        ~df_table["Experiment"].isin(BASELINE_EXPERIMENT_ORDER)
+    ]
+    best_values = {}
+    for column in df_table.columns[1:]:
+        config = TABLE4_COLUMN_CONFIG[column]
+        values = experiment_rows[column].dropna().map(
+            lambda value: normalized_table_value(value, config["decimals"])
+        )
+        if values.empty:
+            continue
+        if config["direction"] == "max":
+            best_values[column] = values.max()
+        else:
+            best_values[column] = values.min()
+    return best_values
+
+
+def write_table4_latex(df_table, destination):
+    metric_columns = list(df_table.columns[1:])
+    lines = [
+        rf"\begin{{tabular}}{{l{'c' * len(metric_columns)}}}",
+        r"\toprule",
+        latex_row(
+            [r"\textbf{Experiment}"]
+            + [TABLE4_COLUMN_CONFIG[column]["header"] for column in metric_columns]
+        ),
+        latex_row(
+            [""] + [TABLE4_COLUMN_CONFIG[column]["unit"] for column in metric_columns]
+        ),
+        r"\midrule",
+    ]
+    best_values = table4_best_values(df_table)
+    baseline_started = False
+    for _, row in df_table.iterrows():
+        is_baseline = row["Experiment"] in BASELINE_EXPERIMENT_ORDER
+        if is_baseline and not baseline_started:
+            lines.append(r"\midrule")
+            baseline_started = True
+
+        formatted_values = []
+        for column in metric_columns:
+            if pd.isna(row[column]):
+                formatted_values.append("-")
+                continue
+            value = normalized_table_value(
+                row[column], TABLE4_COLUMN_CONFIG[column]["decimals"]
+            )
+            formatted_value = format_table_number(row[column], column)
+            if not is_baseline and value == best_values.get(column):
+                formatted_value = rf"\textbf{{{formatted_value}}}"
+            formatted_values.append(formatted_value)
+
+        lines.append(
+            latex_row([latex_escape(row["Experiment"]), *formatted_values])
+        )
+
+    lines.extend([r"\bottomrule", r"\end{tabular}"])
+    destination.write_text("\n".join(lines) + "\n")
+    return destination
+
+
+def export_tables(df_calibration, df_summary):
+    table3 = prepare_table3_data(df_calibration)
+    table4 = prepare_table4_data(df_summary)
+
+    summary_paths = [
+        write_table3_csv(table3, SUMMARY_DIR / "Table3.csv"),
+        write_table4_csv(table4, SUMMARY_DIR / "Table4.csv"),
+    ]
+    paper_paths = [
+        write_table3_latex(table3, PAPER_FIGURES_DIR / "Table3.tex"),
+        write_table4_latex(table4, PAPER_FIGURES_DIR / "Table4.tex"),
+    ]
+    return summary_paths, paper_paths
+
+
+def render_titleless_paper_figures(experiment_dirs, all_lid_data):
+    t10_experiment_dir = next(
+        (path for path in experiment_dirs if path.name == "T10-2"),
+        None,
+    )
+    if t10_experiment_dir is None:
+        raise FileNotFoundError(
+            "Paper Figures 2 and 3 require the T10-2 experiment."
+        )
+
+    df_lid = load_lid_dataframe(t10_experiment_dir)
+    n_enrolments = get_n_enrolments(t10_experiment_dir, df_lid)
+    metric_specs = [
+        {
+            "column": "p",
+            "xlabel": r"Probability assigned to true identity, $p_{i,m_i}$",
+            "baseline_val": 1.0 / n_enrolments,
+            "baseline_label": f"Random Guess (p = 1/{n_enrolments})",
+            "loc": "upper right",
+            "destination": PAPER_FIGURES_DIR / "Figure2.pdf",
+        },
+        {
+            "column": "LID",
+            "xlabel": r"Local information disclosure, $\mathrm{LID}_i$ (bits)",
+            "baseline_val": 0.0,
+            "baseline_label": "No information disclosure",
+            "loc": "upper left",
+            "destination": PAPER_FIGURES_DIR / "Figure3.pdf",
+        },
+    ]
+
+    exported_paths = []
+    for spec in metric_specs:
+        fig = create_metric_figure(
+            df_lid,
+            column=spec["column"],
+            title=None,
+            xlabel=spec["xlabel"],
+            baseline_val=spec["baseline_val"],
+            baseline_label=spec["baseline_label"],
+            loc=spec["loc"],
+        )
+        fig.savefig(spec["destination"], format="pdf")
+        plt.close(fig)
+        exported_paths.append(spec["destination"])
+
+    for show_legend, figure_name in [
+        (True, "Figure4"),
+        (False, "Figure4_no_legend"),
+    ]:
+        fig, _ = create_combined_lid_ccdf_figure(
+            all_lid_data,
+            title=None,
+            show_legend=show_legend,
+        )
+        destination = PAPER_FIGURES_DIR / f"{figure_name}.pdf"
+        fig.savefig(destination, format="pdf", bbox_inches="tight")
+        plt.close(fig)
+        exported_paths.append(destination)
+
+    return exported_paths
+
+
+def export_paper_figures(
+    df_calibration,
+    df_summary,
+    experiment_dirs,
+    all_lid_data,
+):
     PAPER_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-    t10_plots_dir = RESULTS_DIR / "T10-2" / "plots"
-    exported_paths = []
+    for figure_number in range(2, 6):
+        (PAPER_FIGURES_DIR / f"Figure{figure_number}.png").unlink(missing_ok=True)
+    for table_name in ["Table3", "Table4"]:
+        (PAPER_FIGURES_DIR / f"{table_name}.csv").unlink(missing_ok=True)
+
+    exported_paths = render_titleless_paper_figures(experiment_dirs, all_lid_data)
     skipped = []
 
-    exported_paths.append(
-        copy_png_figure(
-            t10_plots_dir / "probability_distribution.pdf",
-            "Figure2",
-            PAPER_FIGURES_DIR,
-        )
-    )
-    exported_paths.append(
-        copy_png_figure(
-            t10_plots_dir / "lid_distribution.png",
-            "Figure3",
-            PAPER_FIGURES_DIR,
-        )
-    )
-    exported_paths.append(
-        copy_png_figure(
-            SUMMARY_DIR / "lid_combined_ccdf.png",
-            "Figure4",
-            PAPER_FIGURES_DIR,
-        )
-    )
-
-    figure5_path = copy_png_figure(
-        SUMMARY_DIR / "eer_vs_infodisc_scatter.png",
+    figure5_path = copy_figure(
+        SUMMARY_DIR / "eer_vs_infodisc_scatter.pdf",
         "Figure5",
         PAPER_FIGURES_DIR,
         required=False,
@@ -633,25 +991,40 @@ def export_paper_figures():
     else:
         skipped.append("Figure5")
 
-    exported_paths.append(
-        save_rounded_table(
-            SUMMARY_DIR / "calibration_coeff.csv",
-            "Table3",
-            PAPER_FIGURES_DIR,
-        )
+    figure5_no_legend_path = copy_figure(
+        SUMMARY_DIR / "eer_vs_infodisc_scatter_no_legend.pdf",
+        "Figure5_no_legend",
+        PAPER_FIGURES_DIR,
+        required=False,
     )
-    exported_paths.append(
-        save_rounded_table(
-            SUMMARY_DIR / "summary_table.csv",
-            "Table4",
-            PAPER_FIGURES_DIR,
-        )
-    )
+    if figure5_no_legend_path:
+        exported_paths.append(figure5_no_legend_path)
+    else:
+        skipped.append("Figure5_no_legend")
+
+    summary_table_paths, paper_table_paths = export_tables(df_calibration, df_summary)
+    exported_paths.extend(paper_table_paths)
 
     return {
         "files": len(exported_paths),
         "skipped": skipped,
+        "summary_table_paths": summary_table_paths,
     }
+
+
+def export_readme_figures():
+    README_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
+    t10_plots_dir = RESULTS_DIR / "T10-2" / "plots"
+    sources = [
+        (t10_plots_dir / "probability_distribution.png", "Figure2"),
+        (t10_plots_dir / "lid_distribution.png", "Figure3"),
+        (SUMMARY_DIR / "lid_combined_ccdf.png", "Figure4"),
+    ]
+    return [
+        copy_figure(source_path, figure_name, README_FIGURES_DIR)
+        for source_path, figure_name in sources
+    ]
 
 
 def plot_combined_summary(experiment_dirs):
@@ -664,10 +1037,20 @@ def plot_combined_summary(experiment_dirs):
     summary_paths.extend(plot_combined_lid_ccdf(all_lid_data, SUMMARY_DIR))
     df_summary, summary_table_path = build_summary_table(experiment_dirs, SUMMARY_DIR)
     summary_paths.append(summary_table_path)
-    summary_paths.append(build_calibration_coeff_table(experiment_dirs, SUMMARY_DIR))
+    df_calibration, calibration_path = build_calibration_coeff_table(
+        experiment_dirs, SUMMARY_DIR
+    )
+    summary_paths.append(calibration_path)
     eer_plot_paths = plot_summary_visuals(df_summary, SUMMARY_DIR)
     summary_paths.extend(eer_plot_paths)
-    paper_export_summary = export_paper_figures()
+    paper_export_summary = export_paper_figures(
+        df_calibration,
+        df_summary,
+        experiment_dirs,
+        all_lid_data,
+    )
+    summary_paths.extend(paper_export_summary["summary_table_paths"])
+    readme_paths = export_readme_figures()
 
     return {
         "summary_table": df_summary,
@@ -675,6 +1058,7 @@ def plot_combined_summary(experiment_dirs):
         "eer_plot_created": bool(eer_plot_paths),
         "paper_files": paper_export_summary["files"],
         "paper_skipped": paper_export_summary["skipped"],
+        "readme_files": len(readme_paths),
     }
 
 
@@ -700,6 +1084,7 @@ if __name__ == "__main__":
     print(f"Generated {total_experiment_plots} per-experiment plot files.")
     print(f"Generated {summary['summary_files']} summary files.")
     print(f"Exported {summary['paper_files']} paper figure/table files.")
+    print(f"Exported {summary['readme_files']} README figure files.")
     if not summary["eer_plot_created"]:
         print("Skipped EER vs information disclosure plot because EER is unavailable.")
     for item in summary["paper_skipped"]:
@@ -710,5 +1095,6 @@ if __name__ == "__main__":
     print("Plots are saved in results/experiments/<experiment>/plots/.")
     print("Summary outputs can be found in results/summary/.")
     print("Paper artifacts can be found in results/paper_figures/.")
+    print("README figures can be found in results/readme_figures/.")
     print(SEPARATOR2)
     print()

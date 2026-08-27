@@ -14,6 +14,8 @@ results/*
 !results/
 !results/paper_figures/
 !results/paper_figures/**
+!results/readme_figures/
+!results/readme_figures/**
 
 # Experiment data: keep only original embedding files in git.
 !data/experiments/
