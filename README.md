@@ -174,4 +174,8 @@ Encountered a bug, have a question, or a suggestion? You can open an issue on Gi
 
 ## Disclaimer
 
-This codebase is provided "as is" for academic research. The authors hold no liability for software faults, unintended consequences, or real-world privacy breaches resulting from its use. This tool should not be solely relied upon for legal compliance audits (e.g., GDPR) in real-world production deployments without independent verification.
+This codebase is provided "as is" for academic research. The authors hold no liability for software faults or unintended consequences.
+
+## License
+
+This work is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
