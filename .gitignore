@@ -29,3 +29,6 @@ data/experiments/**
 !data/shared/**
 
 .DS_Store
+
+# No need to keep the Illustrator files used to generate the annotations
+*.ai

@@ -355,14 +355,19 @@ def create_combined_lid_ccdf_figure(
     #     label="No information disclosure",
     # )
     if title:
-        ax.set_title(title)
-    ax.set_xlabel(r"Local information disclosure, $\mathrm{LID}_i$ (bits)")
-    ax.set_ylabel("Trials exceeding disclosure level (%)")
+        ax.set_title(title, fontsize=13.25)
+    ax.set_xlabel(
+        r"Local information disclosure, $\mathrm{LID}_i$ (bits)",
+        fontsize=13.25,
+    )
+    ax.set_ylabel("Trials exceeding disclosure level (%)", fontsize=13.25)
+    ax.tick_params(axis="both", labelsize=11.75)
     ax.set_ylim([0.0, 100.0])
     experiment_legend = None
     if show_legend:
         experiment_legend = ax.legend(
             loc="lower left",
+            fontsize=11,
             framealpha=0.9,
             borderaxespad=0.2,
             borderpad=0.4,
