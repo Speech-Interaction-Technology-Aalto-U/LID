@@ -155,6 +155,10 @@ Below is an example of the generated probability and LID disclosure histograms (
   </tr>
 </table>
 
+## File conversion from VPC26 framework to LID framework
+
+You can use the script `script/open_pt_and_merge_to_parquet.py` to easily convert your data from the Voice Privacy 2026 framework to a parquet file and then compute the LID metrics.
+
 ## Citation
 
 If you use this framework or code in your work, please cite:
